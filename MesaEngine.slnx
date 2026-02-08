@@ -1,0 +1,8 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="AssetPackerWin32/AssetPackerWin32.vcxproj" Id="bc77e232-a70b-4298-a794-866f332a011f" />
+  <Project Path="MesaCoreWin32/MesaCoreWin32.vcxproj" Id="4b50117b-6eb3-4cbf-b72d-769901d389c6" />
+</Solution>
