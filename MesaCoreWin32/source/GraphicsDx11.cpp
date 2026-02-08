@@ -1,5 +1,6 @@
 #include <Mesa/Graphics.h>
 #include <Mesa/ConfigUtils.h>
+#include <Mesa/FileUtils.h>
 
 namespace Mesa
 {
@@ -82,6 +83,20 @@ namespace Mesa
     {
         RenderScene();
         mp_SwapChain->Present(0, 0);
+    }
+
+    std::vector<uint32_t> GraphicsDx11::CompileShaderPack(const std::string& packPath)
+    {
+        
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+        if (v_PackData.empty()) return std::vector<uint32_t>();
+
+        uint32_t numFilesInPack = 0;
+        memcpy(&numFilesInPack, &v_PackData[0], sizeof(uint32_t));
+        
+        if(numFilesInPack <= 0) return std::vector<uint32_t>();
+
+
     }
 
     /*

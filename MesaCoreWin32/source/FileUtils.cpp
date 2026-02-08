@@ -196,4 +196,26 @@ namespace Mesa
 		// Close the file
 		output.close();
 	}
+
+	/*
+		Reads data as text from provided file. 
+		If the file cannot be read return empty string.
+	*/
+	std::string FileUtils::ReadTextData(const std::string& path)
+	{
+		std::ifstream file(path);
+
+		if (file.is_open())
+		{
+			std::ostringstream oss;
+			oss << file.rdbuf();
+			std::string result = oss.str();
+			file.close();
+			return result;
+		}
+		else
+		{
+			return std::string();
+		}
+	}
 }

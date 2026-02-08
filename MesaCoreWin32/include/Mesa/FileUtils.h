@@ -17,5 +17,6 @@ namespace Mesa
 		static uint32_t HashData(const std::vector<unsigned char>& data);
 		static std::vector<unsigned char> ReadBinaryData(const std::string& path);
 		static void AppendDataToFile(const std::string& path, const std::vector<unsigned char>& data);
+		static std::string ReadTextData(const std::string& path);
 	};
 }

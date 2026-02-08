@@ -12,6 +12,7 @@ namespace Mesa
 		virtual ~Graphics();
 
 		virtual void DrawFrame(Window* p_Window) = 0;
+		virtual std::vector<uint32_t> CompileShaderPack(const std::string& packPath) = 0;
 	};
 
 	class MSAPI GraphicsDx11Exception : public Exception
@@ -32,6 +33,9 @@ namespace Mesa
 
 	public: // Frame drawing functions
 		void DrawFrame(Window* p_Window);
+
+	public: // Asset loading functions
+		std::vector<uint32_t> CompileShaderPack(const std::string& packPath);
 
 	private: // Pipeline initialization functions
 		void InitializeFactory();
