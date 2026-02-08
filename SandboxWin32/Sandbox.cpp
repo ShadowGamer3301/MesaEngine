@@ -12,7 +12,7 @@ void Sandbox::Run()
 {
 	while (mp_Window->Update())
 	{
-
+		mp_Graphics->DrawFrame(mp_Window);
 	}
 }
 

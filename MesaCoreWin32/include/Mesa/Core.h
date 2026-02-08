@@ -66,3 +66,11 @@
 
 // LZAV headers
 #include <lzav.h>
+
+/*
+	This macro checks the HRESULT (hr) returned by a DirectX/COM function.
+	If the result indicates a failure (using the standard FAILED() macro),
+	it throws a GraphicsException, capturing the error code and the
+	current source location (file, line, function) automatically.
+*/
+#define THROW_IF_FAILED_DX(hr) if(FAILED(hr)) throw GraphicsDx11Exception(hr)
