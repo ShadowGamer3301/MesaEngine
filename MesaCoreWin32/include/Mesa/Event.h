@@ -17,33 +17,33 @@ namespace Mesa
 
 	struct KeyInputEvent : public Event
 	{
-		int m_Key = 0;
-		bool m_Pressed = false;
+		int m_Key = 0; // Key identificator (the same as in GLFW library)
+		bool m_Pressed = false; // True when key is pressed or held, false when key is released
 	};
 
 	struct MouseMoveEvent : public Event
 	{
-		double m_X = 0.0;
-		double m_Y = 0.0;
+		double m_X = 0.0; // Cursor position in X-axis relative to top left corner
+		double m_Y = 0.0; // Cursor position in Y-axis relative to top left corner
 	};
 
 	struct MouseButtonEvent : public Event
 	{
-		int m_Button = 0;
-		bool m_Pressed = false;
+		int m_Button = 0; // Button identificator (the same as in GLFW library)
+		bool m_Pressed = false; // True when key is pressed or held, false when key is released
 	};
 
 	struct GamepadConnectEvent : public Event
 	{
-		int m_GamepadId = 0;
-		bool m_Connected = false;
+		int m_GamepadId = 0; // Id of a gamepad
+		bool m_Connected = false; // True if connects, false if disconnects
 	};
 
 	struct GamepadUpdateEvent : public Event
 	{
-		int m_GamepadId = 0;
-		std::array<float, 6> ma_Axes;
-		std::array<bool, 15> ma_Buttons;
+		int m_GamepadId = 0; // Id of a gamepad
+		std::array<float, 6> ma_Axes; // Value of each of the axes in gamepad (order idecntical to the GLFW library)
+		std::array<bool, 15> ma_Buttons; // State of each button on the gamepad (order idecntical to the GLFW library). True if pressed false if not.
 	};
 
 	class MSAPI EventHandler
