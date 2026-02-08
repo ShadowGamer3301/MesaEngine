@@ -115,46 +115,74 @@ namespace Mesa
 		output.close();
 	}
 
+	/*
+		Creates empty file and writes provided text data to it.
+		If the file already exists this function truncates it and writes new data to it.
+	*/
 	void FileUtils::MakeFileWithContent(const std::string& path, const std::string& data)
 	{
+		// Open / create file in truncate mode
 		std::ofstream output(path, std::ios::trunc);
+		// Write text data to the file
 		output << data;
 		output.flush();
+		// Close the file
 		output.close();
 	}
 
+	/*
+		Generates file hash using CRC32 algorithm.
+	*/
 	uint32_t FileUtils::HashFile(const std::string& path)
 	{
+		// Validate that the file even exists
 		if (!FileExists(path)) return 0;
 
+		// Open the file and read raw binary data from it
 		std::ifstream file(path, std::ios::binary);
-
 		std::vector<unsigned char> v_buffer(std::istreambuf_iterator<char>(file), {});
 		
+		// Close file since its no longer needed
 		file.close();
 
+		// Use CRC32 library to generate hash
 		uint32_t result = crc32c::Crc32c(v_buffer.data(), v_buffer.size());
 
 		return result;
 	}
 
+	/*
+		Generates has of data using CRC32 algorithm
+	*/
 	uint32_t FileUtils::HashData(const std::vector<unsigned char>& v_data)
 	{
+		// Use CRC32 library to generate hash
 		uint32_t result = crc32c::Crc32c(v_data.data(), v_data.size());
 
 		return result;
 	}
+
+	/*
+		Reads raw bytes from provied file.
+	*/
 	std::vector<unsigned char> FileUtils::ReadBinaryData(const std::string& path)
 	{
+		// Validate if the file even exists
 		if (!FileExists(path)) return std::vector<unsigned char>();
 
+		// Open the file and read raw bytes from it
 		std::ifstream file(path, std::ios::binary);
 		std::vector<unsigned char> v_buffer(std::istreambuf_iterator<char>(file), {});
+		
+		// Close the file
 		file.close();
 
 		return v_buffer;
 	}
 
+	/*
+		Appdends data to provided file. Data is appended as binary data.
+	*/
 	void FileUtils::AppendDataToFile(const std::string& path, const std::vector<unsigned char>& data)
 	{
 		// Open the file in appended mode (we can only write at the end of the file)
