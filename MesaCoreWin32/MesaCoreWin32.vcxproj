@@ -136,12 +136,15 @@
     <ClInclude Include="include\Mesa\CompressionUtils.h" />
     <ClInclude Include="include\Mesa\ConvertUtils.h" />
     <ClInclude Include="include\Mesa\Core.h" />
+    <ClInclude Include="include\Mesa\Event.h" />
     <ClInclude Include="include\Mesa\Exception.h" />
     <ClInclude Include="include\Mesa\FileUtils.h" />
+    <ClInclude Include="include\Mesa\Window.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\CompressionUtils.cpp" />
     <ClCompile Include="source\ConvertUtils.cpp" />
+    <ClCompile Include="source\Event.cpp" />
     <ClCompile Include="source\Exception.cpp" />
     <ClCompile Include="source\FileUtils.cpp" />
   </ItemGroup>
