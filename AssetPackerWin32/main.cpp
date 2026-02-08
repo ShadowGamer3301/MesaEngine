@@ -194,6 +194,22 @@ int main(void)
 		lookupData += PackData("materials.pcdef");
 	}
 
+	// Look for the file containing info on how to pack directx shaders
+	if (Mesa::FileUtils::FileExists("shaders_dx.pcdef"))
+	{
+		LOG_F(INFO, "Packing DirectX shaders...");
+		// Append generated lookup data to already existing data
+		lookupData += PackData("shaders_dx.pcdef");
+	}
+
+	// Look for the file containing info on how to pack models
+	if (Mesa::FileUtils::FileExists("models.pcdef"))
+	{
+		LOG_F(INFO, "Packing models...");
+		// Append generated lookup data to already existing data
+		lookupData += PackData("models.pcdef");
+	}
+
 	// Generate lookup table that will be used for loading assets
 	LOG_F(INFO, "Generating lookup table...");
 	Mesa::FileUtils::MakeFileWithContent("lookup.csv", lookupData);
