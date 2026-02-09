@@ -84,7 +84,7 @@ namespace Mesa
     */
     void GraphicsDx11::DrawFrame(Window* p_Window)
     {
-        RenderScene();
+        RenderColorBuffer();
         mp_SwapChain->Present(0, 0);
     }
 
@@ -144,6 +144,81 @@ namespace Mesa
 
             // Begin compiling shaders on another thread
             v_CompilationThreads.push_back(std::thread(GraphicsDx11::CompileShader, v_VertBuffer, v_PixlBuffer, ShaderType_Forward, this, v_entries[i].m_OriginalName, v_entries[i+1].m_OriginalName));
+        }
+
+        // Join all compilation threads
+        for (auto& compThread : v_CompilationThreads)
+        {
+            compThread.join();
+        }
+
+        std::map<std::string, uint32_t> result;
+
+        // Associate shaders id with their names
+        for (int i = 0; i < v_entries.size(); i += 2)
+        {
+            result[v_entries[i].m_OriginalName] = GetShaderIdByVertexName(v_entries[i].m_OriginalName);
+        }
+
+        return result;
+    }
+
+    /*
+       Compiles shader pack designated for deferred rendering
+    */
+    std::map<std::string, uint32_t> GraphicsDx11::CompileDeferredShaderPack(const std::string& packPath)
+    {
+        // Read the contents of the pack
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+        if (v_PackData.empty()) return std::map<std::string, uint32_t>();
+
+        // Search the lookup table for files in this pack
+        auto v_entries = LookUpUtils::LoadSpecificPackInfo(packPath);
+
+        // Calculate number of files in pack
+        uint32_t numFilesInPack = 0;
+        memcpy(&numFilesInPack, &v_PackData[0], sizeof(uint32_t));
+
+        // Validate calculated number of files
+        if (numFilesInPack <= 0) return std::map<std::string, uint32_t>();
+        if (numFilesInPack != v_entries.size()) return std::map<std::string, uint32_t>();
+
+        // Calculate all starting positions for each file
+        std::vector<uint64_t> v_startingPositions;
+
+        for (int i = 0; i < numFilesInPack; i++)
+        {
+            uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * i;
+
+            uint64_t startPos = 0;
+            memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+            v_startingPositions.push_back(startPos - 1);
+        }
+
+        // Validate that every vertex shader has its pixel shader
+        if (v_entries.size() % 2 != 0) return std::map<std::string, uint32_t>();
+
+        std::vector<std::thread> v_CompilationThreads;
+
+        for (int i = 0; i < v_entries.size(); i += 2)
+        {
+            // Load vertex shader data
+            std::vector<uint8_t> v_VertBuffer;
+            v_VertBuffer.resize(v_entries[i].m_Size);
+
+            uint64_t startPos = v_startingPositions[v_entries[i].m_Index];
+            memcpy(&v_VertBuffer[0], &v_PackData[startPos], v_entries[i].m_Size);
+
+            // Load pixel shader data
+            std::vector<uint8_t> v_PixlBuffer;
+            v_PixlBuffer.resize(v_entries[i + 1].m_Size);
+
+            startPos = v_startingPositions[v_entries[i + 1].m_Index];
+            memcpy(&v_PixlBuffer[0], &v_PackData[startPos], v_entries[i + 1].m_Size);
+
+            // Begin compiling shaders on another thread
+            v_CompilationThreads.push_back(std::thread(GraphicsDx11::CompileShader, v_VertBuffer, v_PixlBuffer, ShaderType_Deferred, this, v_entries[i].m_OriginalName, v_entries[i + 1].m_OriginalName));
         }
 
         // Join all compilation threads
@@ -455,7 +530,7 @@ namespace Mesa
         THROW_IF_FAILED_DX(mp_Device->CreateSamplerState(&desc, mp_Sampler.GetAddressOf()));
     }
 
-    void GraphicsDx11::RenderScene()
+    void GraphicsDx11::RenderColorBuffer()
     {
         float color[4] = { 0.0f, 0.2f, 0.6f, 1.0f };
         mp_Context->ClearRenderTargetView(mp_RenderTarget.Get(), color);

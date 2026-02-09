@@ -37,6 +37,7 @@ namespace Mesa
 
 	public: // Asset loading functions
 		std::map<std::string, uint32_t> CompileForwardShaderPack(const std::string& packPath);
+		std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath);
 
 	public: // Getters
 		uint32_t GetShaderIdByVertexName(const std::string& name);
@@ -56,7 +57,7 @@ namespace Mesa
 		void InitializeSampler();
 
 	private: // Rendering functions
-		void RenderScene();
+		void RenderColorBuffer();
 
 	private: // Asynchronus asset loading functions
 		static void CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx, std::string vertexName, std::string pixelName);
