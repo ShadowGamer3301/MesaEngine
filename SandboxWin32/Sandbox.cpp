@@ -4,6 +4,7 @@ Sandbox::Sandbox()
 {
 	mp_Graphics->CompileForwardShaderPack("Forward_Shaders.msdp");
 	mp_Graphics->LoadTexturePack("testTextures.mtp");
+	mp_Graphics->LoadModelPack("testModel.mmdp");
 }
 
 Sandbox::~Sandbox()

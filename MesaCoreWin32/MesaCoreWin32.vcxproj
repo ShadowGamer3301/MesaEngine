@@ -138,6 +138,7 @@
     <ClInclude Include="include\Mesa\Application.h" />
     <ClInclude Include="include\Mesa\CompressionUtils.h" />
     <ClInclude Include="include\Mesa\ConfigUtils.h" />
+    <ClInclude Include="include\Mesa\ConstBuffer.h" />
     <ClInclude Include="include\Mesa\ConvertUtils.h" />
     <ClInclude Include="include\Mesa\Core.h" />
     <ClInclude Include="include\Mesa\Entrypoint.h" />

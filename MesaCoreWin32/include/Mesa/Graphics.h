@@ -15,6 +15,7 @@ namespace Mesa
 		virtual void DrawFrame(Window* p_Window) = 0;
 		virtual std::map<std::string, uint32_t> CompileForwardShaderPack(const std::string& packPath) = 0;
 		virtual std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath) = 0;
+		virtual std::map<std::string, uint32_t> LoadModelPack(const std::string& packPath) = 0;
 	};
 
 	class MSAPI GraphicsDx11Exception : public Exception
@@ -40,6 +41,7 @@ namespace Mesa
 		std::map<std::string, uint32_t> CompileForwardShaderPack(const std::string& packPath);
 		std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath);
 		std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath);
+		std::map<std::string, uint32_t> LoadModelPack(const std::string& packPath);
 
 	public: // Getters
 		uint32_t GetShaderIdByVertexName(const std::string& name);
@@ -59,6 +61,10 @@ namespace Mesa
 		void InitializeRasterizer();
 		void InitializeSampler();
 
+	private: // Model data processing
+		void ProcessNode(ModelDx11& outMdl, aiNode* p_Node, const aiScene* p_Scene);
+		MeshDx11 ProcessMesh(aiMesh* p_Mesh, const aiScene* p_Scene);
+
 	private: // Rendering functions
 		void RenderColorBuffer();
 
@@ -67,6 +73,11 @@ namespace Mesa
 		static void CompileVertexShader(std::vector<uint8_t> v_VertexData, ShaderType type, ID3D11VertexShader** pp_Shader, ID3D11InputLayout** pp_Layout, GraphicsDx11* p_Gfx);
 		static void CompilePixelShader(std::vector<uint8_t> v_PixelData, ShaderType type, ID3D11PixelShader** pp_Shader, GraphicsDx11* p_Gfx);
 		static void LoadTexture(std::vector<uint8_t> v_TextureData, GraphicsDx11* p_Gfx, std::string textureName);
+		static void LoadModel(std::vector<uint8_t> v_ModelData, GraphicsDx11* p_Gfx, std::string modelName);
+		static void CreateCriticalBuffer(size_t size, UINT bindFlag, D3D11_USAGE usage, UINT cpuAccess, GraphicsDx11* p_Gfx, ID3D11Buffer** pp_Buffer);
+		static void CreateVertexBuffer(std::vector<VertexDx11> v_verts, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result);
+		static void CreateIndexBuffer(std::vector<uint32_t> v_inds, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result);
+		static void CreateEmptyBuffer(size_t size, UINT bindFlag, D3D11_USAGE usage, UINT cpuAccess, GraphicsDx11* p_Gfx, ID3D11Buffer** pp_Buffer, bool& result);
 
 	private: // ID generating functions
 		uint32_t GenerateShaderUID();
@@ -97,5 +108,6 @@ namespace Mesa
 	private: // Buffers for loaded assets
 		std::vector<ShaderDx11> mv_Shaders;
 		std::vector<TextureDx11> mv_Textures;
+		std::vector<ModelDx11> mv_Models;
 	};
 }

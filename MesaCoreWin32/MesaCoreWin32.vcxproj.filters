@@ -57,6 +57,9 @@
     <ClInclude Include="include\Mesa\LookUpUtils.h">
       <Filter>Pliki nagłówkowe</Filter>
     </ClInclude>
+    <ClInclude Include="include\Mesa\ConstBuffer.h">
+      <Filter>Pliki nagłówkowe</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\FileUtils.cpp">
