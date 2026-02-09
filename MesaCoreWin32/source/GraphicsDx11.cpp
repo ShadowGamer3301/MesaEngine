@@ -36,7 +36,7 @@ namespace Mesa
 	}
 
     /*
-        
+        Constructor: initializes DirectX 11 rendering pipeline
     */
     GraphicsDx11::GraphicsDx11(Window* p_Window)
     {
@@ -79,27 +79,36 @@ namespace Mesa
     {
     }
 
+    /*
+        Draws a single frame
+    */
     void GraphicsDx11::DrawFrame(Window* p_Window)
     {
         RenderScene();
         mp_SwapChain->Present(0, 0);
     }
 
-    std::vector<uint32_t> GraphicsDx11::CompileForwardShaderPack(const std::string& packPath)
+    /*
+        Compiles shader pack designated for forward rendering
+    */
+    std::map<std::string, uint32_t> GraphicsDx11::CompileForwardShaderPack(const std::string& packPath)
     {
-        
+        // Read the contents of the pack
         std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
-        if (v_PackData.empty()) return std::vector<uint32_t>();
+        if (v_PackData.empty()) return std::map<std::string, uint32_t>();
 
+        // Search the lookup table for files in this pack
         auto v_entries = LookUpUtils::LoadSpecificPackInfo(packPath);
 
+        // Calculate number of files in pack
         uint32_t numFilesInPack = 0;
         memcpy(&numFilesInPack, &v_PackData[0], sizeof(uint32_t));
         
-        if(numFilesInPack <= 0) return std::vector<uint32_t>();
+        // Validate calculated number of files
+        if(numFilesInPack <= 0) return std::map<std::string, uint32_t>();
+        if(numFilesInPack != v_entries.size()) return std::map<std::string, uint32_t>();
 
-        if(numFilesInPack != v_entries.size()) return std::vector<uint32_t>();
-
+        // Calculate all starting positions for each file
         std::vector<uint64_t> v_startingPositions;
 
         for (int i = 0; i < numFilesInPack; i++)
@@ -112,7 +121,8 @@ namespace Mesa
             v_startingPositions.push_back(startPos-1);
         }
 
-        if(v_entries.size() % 2 != 0) return std::vector<uint32_t>();
+        // Validate that every vertex shader has its pixel shader
+        if(v_entries.size() % 2 != 0) return std::map<std::string, uint32_t>();
 
         std::vector<std::thread> v_CompilationThreads;
 
@@ -132,15 +142,49 @@ namespace Mesa
             startPos = v_startingPositions[v_entries[i+1].m_Index];
             memcpy(&v_PixlBuffer[0], &v_PackData[startPos], v_entries[i+1].m_Size);
 
+            // Begin compiling shaders on another thread
             v_CompilationThreads.push_back(std::thread(GraphicsDx11::CompileShader, v_VertBuffer, v_PixlBuffer, ShaderType_Forward, this, v_entries[i].m_OriginalName, v_entries[i+1].m_OriginalName));
         }
 
+        // Join all compilation threads
         for (auto& compThread : v_CompilationThreads)
         {
             compThread.join();
         }
 
-        return std::vector<uint32_t>();
+        std::map<std::string, uint32_t> result;
+
+        // Associate shaders id with their names
+        for (int i = 0; i < v_entries.size(); i += 2)
+        {
+            result[v_entries[i].m_OriginalName] = GetShaderIdByVertexName(v_entries[i].m_OriginalName);
+        }
+
+        return result;
+    }
+
+    /*
+        Returns shader ID if the its vertex name matches with provided string
+    */
+    uint32_t GraphicsDx11::GetShaderIdByVertexName(const std::string& name)
+    {
+        for (const auto& shader : mv_Shaders)
+        {
+            if (strcmp(shader.GetVertexShaderName().c_str(), name.c_str()) == 0)
+                return shader.GetShaderUID();
+        }
+    }
+
+    /*
+        Returns shader ID if the its pixel name matches with provided string
+    */
+    uint32_t GraphicsDx11::GetShaderIdByPixelName(const std::string& name)
+    {
+        for (const auto& shader : mv_Shaders)
+        {
+            if (strcmp(shader.GetPixelShaderName().c_str(), name.c_str()) == 0)
+                return shader.GetShaderUID();
+        }
     }
 
     /*
@@ -418,22 +462,29 @@ namespace Mesa
         mp_Context->ClearDepthStencilView(mp_DepthView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
     }
 
+    /*
+        Compiles singular shader
+    */
     void GraphicsDx11::CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx, std::string vertexName, std::string pixelName)
     {
+        // Create new shader instance
         ShaderDx11 shader = {};
 
+        // Compile both vertex and pixel shader on separate threads
         std::thread vertexThread(GraphicsDx11::CompileVertexShader, v_VertexData, type, shader.mp_VertexShader.GetAddressOf(), shader.mp_InputLayout.GetAddressOf(), p_Gfx);
         std::thread pixelThread(GraphicsDx11::CompilePixelShader, v_PixelData, type, shader.mp_PixelShader.GetAddressOf(), p_Gfx);
 
         vertexThread.join();
         pixelThread.join();
 
+        // Validate compilation results
         if (shader.mp_InputLayout.Get() == nullptr || shader.mp_VertexShader.Get() == nullptr || shader.mp_PixelShader.Get() == nullptr)
         {
             LOG_F(ERROR, "At least one of the shader submodules could not be initialized properly! ");
             return;
         }
 
+        // Fill out shader details
         shader.m_ShaderType = type;
         shader.m_PixelShaderName = pixelName;
         shader.m_VertexShaderName = vertexName;
@@ -447,11 +498,16 @@ namespace Mesa
         return;
     }
 
+    /*
+        Compiles vertex shader
+    */
     void GraphicsDx11::CompileVertexShader(std::vector<uint8_t> v_VertexData, ShaderType type, ID3D11VertexShader** pp_Shader, ID3D11InputLayout** pp_Layout, GraphicsDx11* p_Gfx)
     {
+        // Set compilation flags
         UINT compileFlag = D3DCOMPILE_ENABLE_STRICTNESS;
 
 #ifdef _DEBUG
+        // If program runs in debug mode compile shader with DEBUG flag
         LOG_F(INFO, "Compiling shader with debug flag");
         compileFlag |= D3DCOMPILE_DEBUG;
 #endif
@@ -459,7 +515,9 @@ namespace Mesa
         ID3DBlob* p_Code = nullptr;
         ID3DBlob* p_Error = nullptr;
 
+        // Compile shader
         HRESULT hr = D3DCompile(v_VertexData.data(), v_VertexData.size(), nullptr, nullptr, nullptr, "main", "vs_5_0", compileFlag, 0, &p_Code, &p_Error);
+        // Validate compilation results
         if (FAILED(hr))
         {
             if (p_Error) LOG_F(ERROR, "%s", (char*)p_Error->GetBufferPointer());
@@ -467,13 +525,16 @@ namespace Mesa
             return;
         }
 
+        // Create vertex shader module
         hr = p_Gfx->mp_Device->CreateVertexShader(p_Code->GetBufferPointer(), p_Code->GetBufferSize(), nullptr, pp_Shader);
+        // Validate creation results
         if (FAILED(hr))
         {
             LOG_F(ERROR, "CreateVertexShader function failed!");
             return;
         }
 
+        // Create appropriate input layout
         if (type == ShaderType_Forward)
         {
             D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {
@@ -481,6 +542,7 @@ namespace Mesa
                 {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
                 {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
             };
+            // Validate creation results
             hr = p_Gfx->mp_Device->CreateInputLayout(layoutDesc, _countof(layoutDesc), p_Code->GetBufferPointer(), p_Code->GetBufferSize(), pp_Layout);
             if (FAILED(hr))
             {
@@ -494,7 +556,7 @@ namespace Mesa
                {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
                {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
             };
-
+            // Validate creation results
             hr = p_Gfx->mp_Device->CreateInputLayout(layoutDesc, _countof(layoutDesc), p_Code->GetBufferPointer(), p_Code->GetBufferSize(), pp_Layout);
             if (FAILED(hr))
             {
@@ -506,19 +568,25 @@ namespace Mesa
         LOG_F(INFO, "Compiled vertex shader!");
     }
 
+    /*
+        Compiles pixel shader
+    */
     void GraphicsDx11::CompilePixelShader(std::vector<uint8_t> v_PixelData, ShaderType type, ID3D11PixelShader** pp_Shader, GraphicsDx11* p_Gfx)
     {
+        // Set compilation flags
         UINT compileFlag = D3DCOMPILE_ENABLE_STRICTNESS;
 
 #ifdef _DEBUG
+        // If program runs in debug mode compile shader with DEBUG flag
         LOG_F(INFO, "Compiling shader with debug flag");
         compileFlag |= D3DCOMPILE_DEBUG;
 #endif
 
         ID3DBlob* p_Code = nullptr;
         ID3DBlob* p_Error = nullptr;
-
+        // Compile shader
         HRESULT hr = D3DCompile(v_PixelData.data(), v_PixelData.size(), nullptr, nullptr, nullptr, "main", "ps_5_0", compileFlag, 0, &p_Code, &p_Error);
+        // Validate compilation results
         if (FAILED(hr))
         {
             if (p_Error) LOG_F(ERROR, "%s", (char*)p_Error->GetBufferPointer());
@@ -526,7 +594,9 @@ namespace Mesa
             return;
         }
 
+        // Create pixel shader module
         hr = p_Gfx->mp_Device->CreatePixelShader(p_Code->GetBufferPointer(), p_Code->GetBufferSize(), nullptr, pp_Shader);
+        // Validate creation results
         if (FAILED(hr))
         {
             LOG_F(ERROR, "CreatePixelShader function failed for deferred shader!");
@@ -536,10 +606,15 @@ namespace Mesa
         LOG_F(INFO, "Compiled pixel shader!");
     }
 
+    /*
+        Generate unique shader ID
+    */
     uint32_t GraphicsDx11::GenerateShaderUID()
     {
+        // If no shaders have been loaded yet don't bother looking for free ID and simply give it 1
         if (mv_Shaders.empty()) return 1;
 
+        // Start search with ID of 1 - (0 will be reserved for fallback shader)
         uint32_t id = 1;
         bool idFound = false;
 
@@ -548,15 +623,18 @@ namespace Mesa
 
             for (auto& shader : mv_Shaders)
             {
+                // Check if ID is already in use
                 if (shader.m_ShaderUID == id)
                     idFound = true;
             }
 
+            // If ID is in use increment target ID and repeat the search
             if (idFound)
                 id++;
 
         } while (idFound);
 
+        // Return free ID
         return id;
     }
 
