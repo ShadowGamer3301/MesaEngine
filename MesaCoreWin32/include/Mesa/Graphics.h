@@ -14,8 +14,10 @@ namespace Mesa
 
 		virtual void DrawFrame(Window* p_Window) = 0;
 		virtual std::map<std::string, uint32_t> CompileForwardShaderPack(const std::string& packPath) = 0;
+		virtual std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath) = 0;
 		virtual std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath) = 0;
 		virtual std::map<std::string, uint32_t> LoadModelPack(const std::string& packPath) = 0;
+		virtual void SetNumberOfLayers(const uint32_t& layers) = 0;
 	};
 
 	class MSAPI GraphicsDx11Exception : public Exception
@@ -35,13 +37,14 @@ namespace Mesa
 		~GraphicsDx11();
 
 	public: // Frame drawing functions
-		void DrawFrame(Window* p_Window);
+		void DrawFrame(Window* p_Window) override;
+		void SetNumberOfLayers(const uint32_t& layers) override;
 
 	public: // Asset loading functions
-		std::map<std::string, uint32_t> CompileForwardShaderPack(const std::string& packPath);
-		std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath);
-		std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath);
-		std::map<std::string, uint32_t> LoadModelPack(const std::string& packPath);
+		std::map<std::string, uint32_t> CompileForwardShaderPack(const std::string& packPath) override;
+		std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath) override;
+		std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath) override;
+		std::map<std::string, uint32_t> LoadModelPack(const std::string& packPath) override;
 
 	public: // Getters
 		uint32_t GetShaderIdByVertexName(const std::string& name);
@@ -109,5 +112,8 @@ namespace Mesa
 		std::vector<ShaderDx11> mv_Shaders;
 		std::vector<TextureDx11> mv_Textures;
 		std::vector<ModelDx11> mv_Models;
+
+	private: // Data related to layer drawing
+		uint32_t m_NumLayers = 1; // Use only 1 layer by default
 	};
 }

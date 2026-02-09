@@ -89,6 +89,15 @@ namespace Mesa
         mp_SwapChain->Present(0, 0);
     }
 
+    void GraphicsDx11::SetNumberOfLayers(const uint32_t& layers)
+    {
+        // Validate if the requested number of layers is valid
+        if (layers > 0)
+            m_NumLayers = layers;
+        else // If not set it to minimal valid option
+            m_NumLayers = 1;
+    }
+
     /*
         Compiles shader pack designated for forward rendering
     */
