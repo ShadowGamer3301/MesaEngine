@@ -42,7 +42,7 @@ namespace Mesa
     {
         LOG_F(INFO, "Initializing DirectX 11 renderer...");
 
-        // Establish the DXGI Factory to interface with the OS graphics infrastructure.
+        // Initialize DXGI Factory to retrieve an adapter.
         InitializeFactory();
         LOG_F(INFO, "DXGI Factory initialized");
 
@@ -51,7 +51,6 @@ namespace Mesa
         // Create the logical Device (resource creator) and Context (command issuer).
         InitializeDevice();
         LOG_F(INFO, "Device and device context initialized");
-
         // Create the Swap Chain to manage front/back buffers for the given window.
         InitializeSwapChain(p_Window->GetNativeWindow(), p_Window->GetWindowWidth(), p_Window->GetWindowHeight());
         LOG_F(INFO, "SwapChain initialized");
@@ -133,7 +132,7 @@ namespace Mesa
             startPos = v_startingPositions[v_entries[i+1].m_Index];
             memcpy(&v_PixlBuffer[0], &v_PackData[startPos], v_entries[i+1].m_Size);
 
-            v_CompilationThreads.push_back(std::thread(GraphicsDx11::CompileShader, v_VertBuffer, v_PixlBuffer, ShaderType_Forward, this));
+            v_CompilationThreads.push_back(std::thread(GraphicsDx11::CompileShader, v_VertBuffer, v_PixlBuffer, ShaderType_Forward, this, v_entries[i].m_OriginalName, v_entries[i+1].m_OriginalName));
         }
 
         for (auto& compThread : v_CompilationThreads)
@@ -419,7 +418,7 @@ namespace Mesa
         mp_Context->ClearDepthStencilView(mp_DepthView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
     }
 
-    void GraphicsDx11::CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx)
+    void GraphicsDx11::CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx, std::string vertexName, std::string pixelName)
     {
         ShaderDx11 shader = {};
 
@@ -429,6 +428,23 @@ namespace Mesa
         vertexThread.join();
         pixelThread.join();
 
+        if (shader.mp_InputLayout.Get() == nullptr || shader.mp_VertexShader.Get() == nullptr || shader.mp_PixelShader.Get() == nullptr)
+        {
+            LOG_F(ERROR, "At least one of the shader submodules could not be initialized properly! ");
+            return;
+        }
+
+        shader.m_ShaderType = type;
+        shader.m_PixelShaderName = pixelName;
+        shader.m_VertexShaderName = vertexName;
+        p_Gfx->m_ShaderIdSemaphore.acquire();
+        shader.m_ShaderUID = p_Gfx->GenerateShaderUID();
+        p_Gfx->mv_Shaders.push_back(shader);
+        p_Gfx->m_ShaderIdSemaphore.release();
+
+        LOG_F(INFO, "Shader fully compiled with ID = %u", shader.GetShaderUID());
+
+        return;
     }
 
     void GraphicsDx11::CompileVertexShader(std::vector<uint8_t> v_VertexData, ShaderType type, ID3D11VertexShader** pp_Shader, ID3D11InputLayout** pp_Layout, GraphicsDx11* p_Gfx)
@@ -518,5 +534,44 @@ namespace Mesa
         }
 
         LOG_F(INFO, "Compiled pixel shader!");
+    }
+
+    uint32_t GraphicsDx11::GenerateShaderUID()
+    {
+        if (mv_Shaders.empty()) return 1;
+
+        uint32_t id = 1;
+        bool idFound = false;
+
+        do {
+            idFound = false;
+
+            for (auto& shader : mv_Shaders)
+            {
+                if (shader.m_ShaderUID == id)
+                    idFound = true;
+            }
+
+            if (idFound)
+                id++;
+
+        } while (idFound);
+
+        return id;
+    }
+
+    uint32_t GraphicsDx11::GenerateTextureUID()
+    {
+        return 0;
+    }
+
+    uint32_t GraphicsDx11::GenerateModelUID()
+    {
+        return 0;
+    }
+
+    uint32_t GraphicsDx11::GenerateMaterialUID()
+    {
+        return 0;
     }
 }

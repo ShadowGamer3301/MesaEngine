@@ -94,25 +94,24 @@ namespace Mesa
         if (!glfwInit())
             throw WindowException(glfwGetError(nullptr));
 
-        // Specifically tells GLFW NOT to create an OpenGL context. 
-        // This is required when using external APIs like Vulkan or Direct3D.
+        // Specifically tells GLFW NOT to create an OpenGL context
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-        // Disallow manual window resizing by the user.
+        // Disallow manual window resizing by the user
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
         if (fullscreen)
         {
-            // Creates a window on the primary monitor for a "True" fullscreen experience.
+            // Creates a window on the primary monitor for fullscreen mode
             mp_Window = glfwCreateWindow(width, height, title, glfwGetPrimaryMonitor(), nullptr);
         }
         else
         {
-            // Creates a standard floating window.
+            // Creates a standard floating window
             mp_Window = glfwCreateWindow(width, height, title, nullptr, nullptr);
         }
 
-        // Validate that the window was successfully created.
+        // Validate that the window was successfully created
         if (!mp_Window)
             throw WindowException(glfwGetError(nullptr));
 

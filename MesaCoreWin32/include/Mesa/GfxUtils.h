@@ -33,8 +33,12 @@ namespace Mesa
 	public:
 		inline uint32_t GetShaderUID() const noexcept { return m_ShaderUID; }
 		inline ShaderType GetShaderType() const noexcept { return m_ShaderType; }
+		inline std::string GetVertexShaderName() const noexcept { return m_VertexShaderName; }
+		inline std::string GetPixelShaderName() const noexcept { return m_PixelShaderName; }
 
 	protected:
+		std::string m_VertexShaderName = std::string();
+		std::string m_PixelShaderName = std::string();
 		uint32_t m_ShaderUID = 0;
 		ShaderType m_ShaderType = ShaderType_Forward;
 	};

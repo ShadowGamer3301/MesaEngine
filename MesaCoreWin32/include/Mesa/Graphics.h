@@ -55,9 +55,21 @@ namespace Mesa
 		void RenderScene();
 
 	private: // Asynchronus asset loading functions
-		static void CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx);
+		static void CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx, std::string vertexName, std::string pixelName);
 		static void CompileVertexShader(std::vector<uint8_t> v_VertexData, ShaderType type, ID3D11VertexShader** pp_Shader, ID3D11InputLayout** pp_Layout, GraphicsDx11* p_Gfx);
 		static void CompilePixelShader(std::vector<uint8_t> v_PixelData, ShaderType type, ID3D11PixelShader** pp_Shader, GraphicsDx11* p_Gfx);
+
+	private: // ID generating functions
+		uint32_t GenerateShaderUID();
+		uint32_t GenerateTextureUID();
+		uint32_t GenerateModelUID();
+		uint32_t GenerateMaterialUID();
+
+	private: // ID generators semaphores
+		std::binary_semaphore m_TextureIdSemaphore{ 1 };
+		std::binary_semaphore m_ShaderIdSemaphore{ 1 };
+		std::binary_semaphore m_MaterialIdSemaphore{ 1 };
+		std::binary_semaphore m_ModelIdSemaphore{ 1 };
 
 	private: // Basic D3D11 pipeline interfaces
 		Microsoft::WRL::ComPtr<IDXGIFactory> mp_Factory;
@@ -72,5 +84,8 @@ namespace Mesa
 		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_DepthBuffer;
 		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_BackBuffer;
 		Microsoft::WRL::ComPtr<ID3D11SamplerState> mp_Sampler;
+
+	private: // Buffers for loaded assets
+		std::vector<ShaderDx11> mv_Shaders;
 	};
 }

@@ -24,7 +24,7 @@ namespace Mesa
 		LOG_F(INFO, "Window width set to %i px", windowWidth);
 		LOG_F(INFO, "Window height set to %i px", windowHeight);
 
-		// Check for fullscreen mode. ConfigUtils returns lowercase, so we compare against "true".
+		// Check for fullscreen mode.
 		bool fullscreen = strcmp(ConfigUtils::GetValueFromConfig("Window", "Fullscreen").c_str(), "true") == 0;
 
 		// Create the OS-level window instance.
