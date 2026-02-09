@@ -14,6 +14,7 @@ namespace Mesa
 
 		virtual void DrawFrame(Window* p_Window) = 0;
 		virtual std::map<std::string, uint32_t> CompileForwardShaderPack(const std::string& packPath) = 0;
+		virtual std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath) = 0;
 	};
 
 	class MSAPI GraphicsDx11Exception : public Exception
@@ -38,10 +39,12 @@ namespace Mesa
 	public: // Asset loading functions
 		std::map<std::string, uint32_t> CompileForwardShaderPack(const std::string& packPath);
 		std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath);
+		std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath);
 
 	public: // Getters
 		uint32_t GetShaderIdByVertexName(const std::string& name);
 		uint32_t GetShaderIdByPixelName(const std::string& name);
+		uint32_t GetTextureIdByName(const std::string& name);
 
 	private: // Pipeline initialization functions
 		void InitializeFactory();
@@ -63,6 +66,7 @@ namespace Mesa
 		static void CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx, std::string vertexName, std::string pixelName);
 		static void CompileVertexShader(std::vector<uint8_t> v_VertexData, ShaderType type, ID3D11VertexShader** pp_Shader, ID3D11InputLayout** pp_Layout, GraphicsDx11* p_Gfx);
 		static void CompilePixelShader(std::vector<uint8_t> v_PixelData, ShaderType type, ID3D11PixelShader** pp_Shader, GraphicsDx11* p_Gfx);
+		static void LoadTexture(std::vector<uint8_t> v_TextureData, GraphicsDx11* p_Gfx, std::string textureName);
 
 	private: // ID generating functions
 		uint32_t GenerateShaderUID();
@@ -92,5 +96,6 @@ namespace Mesa
 
 	private: // Buffers for loaded assets
 		std::vector<ShaderDx11> mv_Shaders;
+		std::vector<TextureDx11> mv_Textures;
 	};
 }

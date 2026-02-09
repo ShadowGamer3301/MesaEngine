@@ -43,6 +43,17 @@ namespace Mesa
 		ShaderType m_ShaderType = ShaderType_Forward;
 	};
 
+	class MSAPI Texture
+	{
+	public:
+		inline uint32_t GetTextureUID() const noexcept { return m_TextureUID; }
+		inline std::string GetTextureName() const noexcept { return m_TextureName; }
+
+	protected:
+		std::string m_TextureName = std::string();
+		uint32_t m_TextureUID = 0;
+	};
+
 	class MSAPI ShaderDx11 : public Shader
 	{
 		friend class GraphicsDx11;
@@ -50,6 +61,14 @@ namespace Mesa
 		Microsoft::WRL::ComPtr<ID3D11VertexShader> mp_VertexShader;
 		Microsoft::WRL::ComPtr<ID3D11InputLayout> mp_InputLayout;
 		Microsoft::WRL::ComPtr<ID3D11PixelShader> mp_PixelShader;
+	};
+
+	class MSAPI TextureDx11 : public Texture
+	{
+		friend class GraphicsDx11;
+	private:
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_RawData;
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_ResourceView;
 	};
 	
 }

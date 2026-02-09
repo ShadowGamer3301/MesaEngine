@@ -239,6 +239,71 @@ namespace Mesa
     }
 
     /*
+        Loads texture packs from archive
+    */
+    std::map<std::string, uint32_t> GraphicsDx11::LoadTexturePack(const std::string& packPath)
+    {
+        // Read the contents of the pack
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+        if (v_PackData.empty()) return std::map<std::string, uint32_t>();
+
+        // Search the lookup table for files in this pack
+        auto v_entries = LookUpUtils::LoadSpecificPackInfo(packPath);
+
+        // Calculate number of files in pack
+        uint32_t numFilesInPack = 0;
+        memcpy(&numFilesInPack, &v_PackData[0], sizeof(uint32_t));
+
+        // Validate calculated number of files
+        if (numFilesInPack <= 0) return std::map<std::string, uint32_t>();
+        if (numFilesInPack != v_entries.size()) return std::map<std::string, uint32_t>();
+
+        // Calculate all starting positions for each file
+        std::vector<uint64_t> v_startingPositions;
+
+        for (int i = 0; i < numFilesInPack; i++)
+        {
+            uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * i;
+
+            uint64_t startPos = 0;
+            memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+            v_startingPositions.push_back(startPos - 1);
+        }
+
+        std::vector<std::thread> v_LoadThreads;
+
+        for (int i = 0; i < v_entries.size(); i ++)
+        {
+            // Load texture data
+            std::vector<uint8_t> v_DataBuffer;
+            v_DataBuffer.resize(v_entries[i].m_Size);
+
+            uint64_t startPos = v_startingPositions[v_entries[i].m_Index];
+            memcpy(&v_DataBuffer[0], &v_PackData[startPos], v_entries[i].m_Size);
+
+            // Begin decoding texture on another thread
+            v_LoadThreads.push_back(std::thread(GraphicsDx11::LoadTexture, v_DataBuffer, this, v_entries[i].m_OriginalName));
+        }
+
+        // Join all compilation threads
+        for (auto& ldThread : v_LoadThreads)
+        {
+            ldThread.join();
+        }
+
+        std::map<std::string, uint32_t> result;
+
+        // Associate texture ids with their names
+        for (int i = 0; i < v_entries.size(); i++)
+        {
+            result[v_entries[i].m_OriginalName] = GetShaderIdByVertexName(v_entries[i].m_OriginalName);
+        }
+
+        return result;
+    }
+
+    /*
         Returns shader ID if the its vertex name matches with provided string
     */
     uint32_t GraphicsDx11::GetShaderIdByVertexName(const std::string& name)
@@ -248,6 +313,9 @@ namespace Mesa
             if (strcmp(shader.GetVertexShaderName().c_str(), name.c_str()) == 0)
                 return shader.GetShaderUID();
         }
+
+        // If shader ID can't be found return 0 to indicate that the shader isn't loaded
+        return 0;
     }
 
     /*
@@ -260,6 +328,24 @@ namespace Mesa
             if (strcmp(shader.GetPixelShaderName().c_str(), name.c_str()) == 0)
                 return shader.GetShaderUID();
         }
+
+        // If shader ID can't be found return 0 to indicate that the shader isn't loaded
+        return 0;
+    }
+
+    /*
+        Returns texture ID if the its name matches with provided string
+    */
+    uint32_t GraphicsDx11::GetTextureIdByName(const std::string& name)
+    {
+        for (const auto& shader : mv_Shaders)
+        {
+            if (strcmp(shader.GetPixelShaderName().c_str(), name.c_str()) == 0)
+                return shader.GetShaderUID();
+        }
+
+        // If texture ID can't be found return 0 to indicate that the texture isn't loaded
+        return 0;
     }
 
     /*
@@ -542,6 +628,10 @@ namespace Mesa
     */
     void GraphicsDx11::CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx, std::string vertexName, std::string pixelName)
     {
+        // Check if shader isn't loaded already
+        if (p_Gfx->GetShaderIdByVertexName(vertexName) != 0)
+            return;
+
         // Create new shader instance
         ShaderDx11 shader = {};
 
@@ -681,6 +771,77 @@ namespace Mesa
         LOG_F(INFO, "Compiled pixel shader!");
     }
 
+    void GraphicsDx11::LoadTexture(std::vector<uint8_t> v_TextureData, GraphicsDx11* p_Gfx, std::string textureName)
+    {
+        // Check if the texture is already loaded
+        if (p_Gfx->GetTextureIdByName(textureName) != 0)
+            return;
+
+        LOG_F(INFO, "Loading %s", textureName.c_str());
+
+        // Create new texture instance
+        TextureDx11 texture = {};
+
+        // Create variables to store height and width of the texture
+        uint32_t width, height; 
+
+        std::vector<uint8_t> v_DecodedBuffer;
+        uint32_t error = lodepng::decode(v_DecodedBuffer, width, height, v_TextureData);
+        if (error) 
+        {
+            LOG_F(ERROR, "Failed to decode %s", textureName.c_str());
+            return;
+        }
+
+        LOG_F(INFO, "Decoded %s", textureName.c_str());
+
+        // Fill out DirectX structures for texture
+        D3D11_TEXTURE2D_DESC desc = {};
+        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.CPUAccessFlags = 0;
+        desc.Width = width;
+        desc.Height = height;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+
+        D3D11_SUBRESOURCE_DATA initData = {};
+        initData.pSysMem = v_DecodedBuffer.data();
+        initData.SysMemPitch = width * 4;
+        initData.SysMemSlicePitch = width * height * 4;
+
+        HRESULT hr = p_Gfx->mp_Device->CreateTexture2D(&desc, &initData, texture.mp_RawData.GetAddressOf());
+        if (FAILED(hr))
+        {
+            LOG_F(ERROR, "CreateTexture2D failed!");
+            return;
+        }
+
+        // Fill out DirectX structures for resource view
+        D3D11_SHADER_RESOURCE_VIEW_DESC srv = {};
+        srv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        srv.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        srv.Texture2D.MipLevels = 1;
+
+        hr = p_Gfx->mp_Device->CreateShaderResourceView(texture.mp_RawData.Get(), &srv, texture.mp_ResourceView.GetAddressOf());
+        if (FAILED(hr))
+        {
+            LOG_F(ERROR, "CreateShaderResourceView failed!");
+            return;
+        }
+
+        // Fill out the rest of the texture details
+        texture.m_TextureName = textureName;
+        p_Gfx->m_TextureIdSemaphore.acquire();
+        texture.m_TextureUID = p_Gfx->GenerateTextureUID();
+        p_Gfx->mv_Textures.push_back(texture);
+        p_Gfx->m_TextureIdSemaphore.release();
+        LOG_F(INFO, "%s loaded with UID = %u", texture.GetTextureName().c_str(), texture.GetTextureUID());
+        return;
+    }
+
     /*
         Generate unique shader ID
     */
@@ -713,9 +874,36 @@ namespace Mesa
         return id;
     }
 
+    /*
+        Generate unique texture ID
+    */
     uint32_t GraphicsDx11::GenerateTextureUID()
     {
-        return 0;
+        // If no textures have been loaded yet don't bother looking for free ID and simply give it 1
+        if (mv_Textures.empty()) return 1;
+
+        // Start search with ID of 1 - (0 will be reserved for fallback texture)
+        uint32_t id = 1;
+        bool idFound = false;
+
+        do {
+            idFound = false;
+
+            for (auto& texture : mv_Textures)
+            {
+                // Check if ID is already in use
+                if (texture.m_TextureUID == id)
+                    idFound = true;
+            }
+
+            // If ID is in use increment target ID and repeat the search
+            if (idFound)
+                id++;
+
+        } while (idFound);
+
+        // Return free ID
+        return id;
     }
 
     uint32_t GraphicsDx11::GenerateModelUID()
