@@ -1,6 +1,7 @@
 #include <Mesa/Graphics.h>
 #include <Mesa/ConfigUtils.h>
 #include <Mesa/FileUtils.h>
+#include <Mesa/LookUpUtils.h>
 
 namespace Mesa
 {
@@ -85,18 +86,62 @@ namespace Mesa
         mp_SwapChain->Present(0, 0);
     }
 
-    std::vector<uint32_t> GraphicsDx11::CompileShaderPack(const std::string& packPath)
+    std::vector<uint32_t> GraphicsDx11::CompileForwardShaderPack(const std::string& packPath)
     {
         
         std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
         if (v_PackData.empty()) return std::vector<uint32_t>();
+
+        auto v_entries = LookUpUtils::LoadSpecificPackInfo(packPath);
 
         uint32_t numFilesInPack = 0;
         memcpy(&numFilesInPack, &v_PackData[0], sizeof(uint32_t));
         
         if(numFilesInPack <= 0) return std::vector<uint32_t>();
 
+        if(numFilesInPack != v_entries.size()) return std::vector<uint32_t>();
 
+        std::vector<uint64_t> v_startingPositions;
+
+        for (int i = 0; i < numFilesInPack; i++)
+        {
+            uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * i;
+
+            uint64_t startPos = 0;
+            memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+            v_startingPositions.push_back(startPos-1);
+        }
+
+        if(v_entries.size() % 2 != 0) return std::vector<uint32_t>();
+
+        std::vector<std::thread> v_CompilationThreads;
+
+        for (int i =0;i < v_entries.size(); i += 2)
+        {
+            // Load vertex shader data
+            std::vector<uint8_t> v_VertBuffer;
+            v_VertBuffer.resize(v_entries[i].m_Size);
+
+            uint64_t startPos = v_startingPositions[v_entries[i].m_Index];
+            memcpy(&v_VertBuffer[0], &v_PackData[startPos], v_entries[i].m_Size);
+
+            // Load pixel shader data
+            std::vector<uint8_t> v_PixlBuffer;
+            v_PixlBuffer.resize(v_entries[i + 1].m_Size);
+
+            startPos = v_startingPositions[v_entries[i+1].m_Index];
+            memcpy(&v_PixlBuffer[0], &v_PackData[startPos], v_entries[i+1].m_Size);
+
+            v_CompilationThreads.push_back(std::thread(GraphicsDx11::CompileShader, v_VertBuffer, v_PixlBuffer, ShaderType_Forward, this));
+        }
+
+        for (auto& compThread : v_CompilationThreads)
+        {
+            compThread.join();
+        }
+
+        return std::vector<uint32_t>();
     }
 
     /*
@@ -372,5 +417,106 @@ namespace Mesa
         float color[4] = { 0.0f, 0.2f, 0.6f, 1.0f };
         mp_Context->ClearRenderTargetView(mp_RenderTarget.Get(), color);
         mp_Context->ClearDepthStencilView(mp_DepthView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+    }
+
+    void GraphicsDx11::CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx)
+    {
+        ShaderDx11 shader = {};
+
+        std::thread vertexThread(GraphicsDx11::CompileVertexShader, v_VertexData, type, shader.mp_VertexShader.GetAddressOf(), shader.mp_InputLayout.GetAddressOf(), p_Gfx);
+        std::thread pixelThread(GraphicsDx11::CompilePixelShader, v_PixelData, type, shader.mp_PixelShader.GetAddressOf(), p_Gfx);
+
+        vertexThread.join();
+        pixelThread.join();
+
+    }
+
+    void GraphicsDx11::CompileVertexShader(std::vector<uint8_t> v_VertexData, ShaderType type, ID3D11VertexShader** pp_Shader, ID3D11InputLayout** pp_Layout, GraphicsDx11* p_Gfx)
+    {
+        UINT compileFlag = D3DCOMPILE_ENABLE_STRICTNESS;
+
+#ifdef _DEBUG
+        LOG_F(INFO, "Compiling shader with debug flag");
+        compileFlag |= D3DCOMPILE_DEBUG;
+#endif
+
+        ID3DBlob* p_Code = nullptr;
+        ID3DBlob* p_Error = nullptr;
+
+        HRESULT hr = D3DCompile(v_VertexData.data(), v_VertexData.size(), nullptr, nullptr, nullptr, "main", "vs_5_0", compileFlag, 0, &p_Code, &p_Error);
+        if (FAILED(hr))
+        {
+            if (p_Error) LOG_F(ERROR, "%s", (char*)p_Error->GetBufferPointer());
+            
+            return;
+        }
+
+        hr = p_Gfx->mp_Device->CreateVertexShader(p_Code->GetBufferPointer(), p_Code->GetBufferSize(), nullptr, pp_Shader);
+        if (FAILED(hr))
+        {
+            LOG_F(ERROR, "CreateVertexShader function failed!");
+            return;
+        }
+
+        if (type == ShaderType_Forward)
+        {
+            D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {
+                {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+                {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+                {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            };
+            hr = p_Gfx->mp_Device->CreateInputLayout(layoutDesc, _countof(layoutDesc), p_Code->GetBufferPointer(), p_Code->GetBufferSize(), pp_Layout);
+            if (FAILED(hr))
+            {
+                LOG_F(ERROR, "CreateInputLayout function failed for forward shader!");
+                return;
+            }
+        }
+        else
+        {
+            D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {
+               {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+               {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            };
+
+            hr = p_Gfx->mp_Device->CreateInputLayout(layoutDesc, _countof(layoutDesc), p_Code->GetBufferPointer(), p_Code->GetBufferSize(), pp_Layout);
+            if (FAILED(hr))
+            {
+                LOG_F(ERROR, "CreateInputLayout function failed for deferred shader!");
+                return;
+            }
+        }
+
+        LOG_F(INFO, "Compiled vertex shader!");
+    }
+
+    void GraphicsDx11::CompilePixelShader(std::vector<uint8_t> v_PixelData, ShaderType type, ID3D11PixelShader** pp_Shader, GraphicsDx11* p_Gfx)
+    {
+        UINT compileFlag = D3DCOMPILE_ENABLE_STRICTNESS;
+
+#ifdef _DEBUG
+        LOG_F(INFO, "Compiling shader with debug flag");
+        compileFlag |= D3DCOMPILE_DEBUG;
+#endif
+
+        ID3DBlob* p_Code = nullptr;
+        ID3DBlob* p_Error = nullptr;
+
+        HRESULT hr = D3DCompile(v_PixelData.data(), v_PixelData.size(), nullptr, nullptr, nullptr, "main", "ps_5_0", compileFlag, 0, &p_Code, &p_Error);
+        if (FAILED(hr))
+        {
+            if (p_Error) LOG_F(ERROR, "%s", (char*)p_Error->GetBufferPointer());
+
+            return;
+        }
+
+        hr = p_Gfx->mp_Device->CreatePixelShader(p_Code->GetBufferPointer(), p_Code->GetBufferSize(), nullptr, pp_Shader);
+        if (FAILED(hr))
+        {
+            LOG_F(ERROR, "CreatePixelShader function failed for deferred shader!");
+            return;
+        }
+
+        LOG_F(INFO, "Compiled pixel shader!");
     }
 }

@@ -15,6 +15,7 @@ namespace Mesa
 	class MSAPI LookUpUtils
 	{
 	public:
-		std::vector<LookUpEntry> LoadLookupTable();
+		static std::vector<LookUpEntry> LoadLookupTable();
+		static std::vector<LookUpEntry> LoadSpecificPackInfo(const std::string& packName);
 	};
 }

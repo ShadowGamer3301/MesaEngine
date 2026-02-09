@@ -2,6 +2,7 @@
 
 Sandbox::Sandbox()
 {
+	mp_Graphics->CompileForwardShaderPack("Forward_Shaders.msdp");
 }
 
 Sandbox::~Sandbox()

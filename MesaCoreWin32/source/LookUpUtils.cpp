@@ -16,7 +16,7 @@ namespace Mesa
 		{
 			if (strcmp(line.c_str(), "\n") == 0) continue;
 
-			std::vector<std::string> v_details = ConvertUtils::SplitStringByChar(fileData, ',');
+			std::vector<std::string> v_details = ConvertUtils::SplitStringByChar(line, ',');
 			
 			if (v_details.size() < 5)
 			{
@@ -32,6 +32,21 @@ namespace Mesa
 			entry.m_Size = ConvertUtils::StringToInt(v_details[4]);
 
 			v_result.push_back(entry);
+		}
+
+		return v_result;
+	}
+
+	std::vector<LookUpEntry> LookUpUtils::LoadSpecificPackInfo(const std::string& packName)
+	{
+		std::vector<LookUpEntry> v_entries = LoadLookupTable();
+
+		std::vector<LookUpEntry> v_result;
+
+		for (const auto& entry : v_entries)
+		{
+			if (strcmp(packName.c_str(), entry.m_PackName.c_str()) == 0)
+				v_result.push_back(entry);
 		}
 
 		return v_result;
