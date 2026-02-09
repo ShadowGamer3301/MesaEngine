@@ -145,6 +145,7 @@
     <ClInclude Include="include\Mesa\Event.h" />
     <ClInclude Include="include\Mesa\Exception.h" />
     <ClInclude Include="include\Mesa\FileUtils.h" />
+    <ClInclude Include="include\Mesa\GameObject.h" />
     <ClInclude Include="include\Mesa\GfxUtils.h" />
     <ClInclude Include="include\Mesa\Graphics.h" />
     <ClInclude Include="include\Mesa\LookUpUtils.h" />
@@ -152,6 +153,7 @@
     <ClInclude Include="include\Mesa\Window.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="source\GameObject.cpp" />
     <ClCompile Include="source\LookUpUtils.cpp" />
     <ClCompile Include="source\Application.cpp" />
     <ClCompile Include="source\CompressionUtils.cpp" />
