@@ -10,7 +10,7 @@ namespace Mesa
 	*/
 	Application::Application()
 	{
-		LOG_F(INFO, "Starting FreeG application...");
+		LOG_F(INFO, "Starting Mesa application...");
 
 		// Retrieve window dimensions from engine.ini.
 		int windowWidth = ConvertUtils::StringToInt(ConfigUtils::GetValueFromConfig("Window", "Width"));
@@ -24,12 +24,13 @@ namespace Mesa
 		LOG_F(INFO, "Window width set to %i px", windowWidth);
 		LOG_F(INFO, "Window height set to %i px", windowHeight);
 
-		// Check for fullscreen mode. ConfigUtils returns lowercase, so we compare against "true".
+		// Check for fullscreen mode.
 		bool fullscreen = strcmp(ConfigUtils::GetValueFromConfig("Window", "Fullscreen").c_str(), "true") == 0;
 
 		// Create the OS-level window instance.
 		mp_Window = new Window(windowWidth, windowHeight, "SandboxWin32", fullscreen);
-		// Determine which Graphics API (Vulkan or DX11) to initialize based on the config.
+		// Initialize DX11 renderer
+		mp_Graphics = new GraphicsDx11(mp_Window);
 	}
 
 	/*
@@ -37,6 +38,7 @@ namespace Mesa
 	*/
 	Application::~Application()
 	{
+		if (mp_Graphics) delete mp_Graphics;
 		if (mp_Window) delete mp_Window;
 	}
 }

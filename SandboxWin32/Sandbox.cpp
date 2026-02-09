@@ -2,6 +2,8 @@
 
 Sandbox::Sandbox()
 {
+	mp_Graphics->CompileForwardShaderPack("Forward_Shaders.msdp");
+	mp_Graphics->LoadTexturePack("testTextures.mtp");
 }
 
 Sandbox::~Sandbox()
@@ -12,7 +14,7 @@ void Sandbox::Run()
 {
 	while (mp_Window->Update())
 	{
-
+		mp_Graphics->DrawFrame(mp_Window);
 	}
 }
 

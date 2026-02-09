@@ -1,0 +1,74 @@
+#pragma once
+#include "Core.h"
+
+namespace Mesa
+{
+	/*
+		Vertex structure used for forward rendering
+	*/
+	struct ForwardVertexDx11
+	{
+		DirectX::XMFLOAT3 m_Position;
+		DirectX::XMFLOAT2 m_TexCoord;
+		DirectX::XMFLOAT3 m_Normal;
+	};
+
+	/*
+		Vertex structure used for deferred rendering
+	*/
+	struct DeferredVertexDx11
+	{
+		DirectX::XMFLOAT3 m_Position;
+		DirectX::XMFLOAT2 m_TexCoord;
+	};
+
+	enum ShaderType
+	{
+		ShaderType_Forward = 0, // Used for forward rendering
+		ShaderType_Deferred = 1, // Used for deferred rendering
+	};
+
+	class MSAPI Shader
+	{
+	public:
+		inline uint32_t GetShaderUID() const noexcept { return m_ShaderUID; }
+		inline ShaderType GetShaderType() const noexcept { return m_ShaderType; }
+		inline std::string GetVertexShaderName() const noexcept { return m_VertexShaderName; }
+		inline std::string GetPixelShaderName() const noexcept { return m_PixelShaderName; }
+
+	protected:
+		std::string m_VertexShaderName = std::string();
+		std::string m_PixelShaderName = std::string();
+		uint32_t m_ShaderUID = 0;
+		ShaderType m_ShaderType = ShaderType_Forward;
+	};
+
+	class MSAPI Texture
+	{
+	public:
+		inline uint32_t GetTextureUID() const noexcept { return m_TextureUID; }
+		inline std::string GetTextureName() const noexcept { return m_TextureName; }
+
+	protected:
+		std::string m_TextureName = std::string();
+		uint32_t m_TextureUID = 0;
+	};
+
+	class MSAPI ShaderDx11 : public Shader
+	{
+		friend class GraphicsDx11;
+	private:
+		Microsoft::WRL::ComPtr<ID3D11VertexShader> mp_VertexShader;
+		Microsoft::WRL::ComPtr<ID3D11InputLayout> mp_InputLayout;
+		Microsoft::WRL::ComPtr<ID3D11PixelShader> mp_PixelShader;
+	};
+
+	class MSAPI TextureDx11 : public Texture
+	{
+		friend class GraphicsDx11;
+	private:
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_RawData;
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_ResourceView;
+	};
+	
+}

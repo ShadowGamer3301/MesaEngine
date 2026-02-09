@@ -49,3 +49,21 @@ Directory1/File3.png
 After AssetPacker is done packing it will generate file called lookup.csv where
 information about archives is stored. This file will be used later to load
 individual assets from the archives.
+
+## Packing shaders
+Due to how Mesa Engine handles shaders they are quite tricky to pack and their packs
+require few additional rules:
+- Vertex shader and pixel shader must be next to each other with vertex shader being the first shader like this:
+
+```
+$ShaderPack.msp
+
+V_FirstShader.hlsl
+P_FirstShader.hlsl
+V_SecondShader.hlsl
+P_SecondShader.hlsl
+```
+
+- Shaders used for forward and deferred rendering cannot be combined into one pack.
+- Shaders must be in their source code version (uncompiled HLSL code).
+- Only one pixel shader per vertex shader is premitted.
