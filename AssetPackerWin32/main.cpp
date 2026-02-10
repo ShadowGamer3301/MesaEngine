@@ -1,6 +1,6 @@
 #include "Core.h"
 
-inline std::string PackData(const std::string& path)
+inline std::string PackData(const std::string& path, const std::string& targetPath)
 {
 	std::ifstream file(path);
 
@@ -170,12 +170,86 @@ inline std::string PackData(const std::string& path)
 
 	std::string result = oss.str();
 
+	for (const auto& archive : archivesMap)
+	{
+		std::string newFileName = Mesa::FileUtils::CombinePaths(targetPath, archive.first);
+
+		BOOL mr = MoveFile(Mesa::ConvertUtils::StringToWideString(archive.first).c_str(), Mesa::ConvertUtils::StringToWideString(newFileName).c_str());
+		if (mr == 0)
+		{
+			LOG_F(ERROR, "Failed to move archive to its destignated path!");
+			throw Mesa::Exception();
+		}
+		
+	}
+
 	// Return data for lookup table
 	return result;
 }
 
-int main(void)
+inline void CreateTree(const std::vector<std::string>& v_Directories)
 {
+	std::string prevDirs = std::string();
+
+	for (auto& entry : v_Directories)
+	{
+		std::string finalDir = Mesa::FileUtils::CombinePaths(prevDirs, entry);
+
+		BOOL result = CreateDirectory(Mesa::ConvertUtils::StringToWideString(finalDir).c_str(), nullptr);
+
+		if (result == 0)
+		{
+			if (GetLastError() != ERROR_ALREADY_EXISTS)
+			{
+				LOG_F(ERROR, "Failed to create directory: %s", entry.c_str());
+				throw Mesa::Exception();
+			}
+		}
+
+		prevDirs = finalDir;
+	}
+}
+
+inline void ValidateDirectories()
+{
+	std::string shaderDir = Mesa::ConfigUtils::GetValueFromConfigCS("PATH", "Shader");
+	std::string modelDir = Mesa::ConfigUtils::GetValueFromConfigCS("PATH", "Model");
+	std::string textureDir = Mesa::ConfigUtils::GetValueFromConfigCS("PATH", "Texture");
+	std::string materialDir = Mesa::ConfigUtils::GetValueFromConfigCS("PATH", "Material");
+
+	std::vector<std::string> v_ShaderPath = Mesa::ConvertUtils::SplitStringByChar(shaderDir, '/');
+
+	if (v_ShaderPath.size() <= 1)
+		v_ShaderPath = Mesa::ConvertUtils::SplitStringByChar(shaderDir, '\\');
+
+	CreateTree(v_ShaderPath);
+
+	std::vector<std::string> v_TexturePath = Mesa::ConvertUtils::SplitStringByChar(textureDir, '/');
+	if (v_TexturePath.size() <= 1)
+		v_TexturePath = Mesa::ConvertUtils::SplitStringByChar(textureDir, '\\');
+
+	CreateTree(v_TexturePath);
+
+	std::vector<std::string> v_ModelPath = Mesa::ConvertUtils::SplitStringByChar(modelDir, '/');
+	if (v_ModelPath.size() <= 1)
+		v_ModelPath = Mesa::ConvertUtils::SplitStringByChar(modelDir, '\\');
+
+	CreateTree(v_ModelPath);
+
+	std::vector<std::string> v_MaterialPath = Mesa::ConvertUtils::SplitStringByChar(materialDir, '/');
+	if (v_MaterialPath.size() <= 1)
+		v_MaterialPath = Mesa::ConvertUtils::SplitStringByChar(materialDir, '\\');
+
+	CreateTree(v_MaterialPath);
+}
+
+int main(void) try
+{
+	if (!Mesa::FileUtils::FileExists("engine.ini"))
+		Mesa::ConfigUtils::GenerateConfig();
+
+	ValidateDirectories();
+
 	std::string lookupData = std::string();
 
 	// Look for the file containing info on how to pack textures
@@ -183,7 +257,7 @@ int main(void)
 	{
 		LOG_F(INFO, "Packing textures...");
 		// Append generated lookup data to already existing data 
-		lookupData += PackData("textures.pcdef");
+		lookupData += PackData("textures.pcdef", Mesa::ConfigUtils::GetValueFromConfigCS("Path", "Texture"));
 	}
 
 	// Look for the file containing info on how to pack materials
@@ -191,7 +265,7 @@ int main(void)
 	{
 		LOG_F(INFO, "Packing materials...");
 		// Append generated lookup data to already existing data
-		lookupData += PackData("materials.pcdef");
+		lookupData += PackData("materials.pcdef", Mesa::ConfigUtils::GetValueFromConfigCS("Path", "Material"));
 	}
 
 	// Look for the file containing info on how to pack directx shaders
@@ -199,7 +273,7 @@ int main(void)
 	{
 		LOG_F(INFO, "Packing DirectX shaders...");
 		// Append generated lookup data to already existing data
-		lookupData += PackData("shaders_dx.pcdef");
+		lookupData += PackData("shaders_dx.pcdef", Mesa::ConfigUtils::GetValueFromConfigCS("Path", "Shader"));
 	}
 
 	// Look for the file containing info on how to pack models
@@ -207,7 +281,7 @@ int main(void)
 	{
 		LOG_F(INFO, "Packing models...");
 		// Append generated lookup data to already existing data
-		lookupData += PackData("models.pcdef");
+		lookupData += PackData("models.pcdef", Mesa::ConfigUtils::GetValueFromConfigCS("Path", "Model"));
 	}
 
 	// Generate lookup table that will be used for loading assets
@@ -216,4 +290,9 @@ int main(void)
 	LOG_F(INFO, "Lookup table generated");
 
 	return 0;
+}
+catch (Mesa::Exception& me)
+{
+	LOG_F(ERROR, "%s", me.what());
+	return 1;
 }

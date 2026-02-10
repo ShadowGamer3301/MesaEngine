@@ -2,6 +2,9 @@
 #include <Mesa/Core.h>
 #include <Mesa/FileUtils.h>
 #include <Mesa/CompressionUtils.h>
+#include <Mesa/ConfigUtils.h>
+#include <Mesa/ConvertUtils.h>
+#include <Mesa/Exception.h>
 
 struct Entry
 {
