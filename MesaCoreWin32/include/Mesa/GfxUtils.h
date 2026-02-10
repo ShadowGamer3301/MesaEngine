@@ -28,6 +28,13 @@ namespace Mesa
 		ShaderType_Deferred = 1, // Used for deferred rendering
 	};
 
+	struct VertexDx11
+	{
+		DirectX::XMFLOAT3 m_Position;
+		DirectX::XMFLOAT2 m_TexCoord;
+		DirectX::XMFLOAT3 m_Normal;
+	};
+
 	class MSAPI Shader
 	{
 	public:
@@ -41,6 +48,17 @@ namespace Mesa
 		std::string m_PixelShaderName = std::string();
 		uint32_t m_ShaderUID = 0;
 		ShaderType m_ShaderType = ShaderType_Forward;
+	};
+
+	class MSAPI Model
+	{
+	public:
+		inline uint32_t GetModelUID() const noexcept { return m_ModelUID; }
+		inline std::string GetModelName() const noexcept { return m_ModelName; }
+
+	protected:
+		uint32_t m_ModelUID = 0;
+		std::string m_ModelName = std::string();
 	};
 
 	class MSAPI Texture
@@ -70,5 +88,22 @@ namespace Mesa
 		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_RawData;
 		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_ResourceView;
 	};
-	
+
+	class MSAPI MeshDx11
+	{
+		friend class GraphicsDx11;
+		friend class ModelDx11;
+	private:
+		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_VertexBuffer;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_IndexBuffer;
+		uint32_t m_NumIndices = 0;
+	};
+
+	class MSAPI ModelDx11 : public Model
+	{
+		friend class GraphicsDx11;
+	private:
+		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_ConstBufferMVP;
+		std::vector<MeshDx11> mv_Meshes;
+	};
 }

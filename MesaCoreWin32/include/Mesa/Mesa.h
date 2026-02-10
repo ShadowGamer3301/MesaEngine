@@ -10,3 +10,5 @@
 #include "Application.h"
 #include "Entrypoint.h"
 #include "Graphics.h"
+#include "Camera.h"
+#include "GameObject.h"

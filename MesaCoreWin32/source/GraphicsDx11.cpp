@@ -2,6 +2,8 @@
 #include <Mesa/ConfigUtils.h>
 #include <Mesa/FileUtils.h>
 #include <Mesa/LookUpUtils.h>
+#include <Mesa/ConstBuffer.h>
+#include <Mesa/ConvertUtils.h>
 
 namespace Mesa
 {
@@ -73,6 +75,9 @@ namespace Mesa
         // Configure the Sampler
         InitializeSampler();
         LOG_F(INFO, "Sampler initialized");
+        // Configure blend state
+        InitializeBlendState();
+        LOG_F(INFO, "Blend state initialized");
     }
 
     GraphicsDx11::~GraphicsDx11()
@@ -84,8 +89,34 @@ namespace Mesa
     */
     void GraphicsDx11::DrawFrame(Window* p_Window)
     {
-        RenderColorBuffer();
+        for (int i = 0; i < m_NumLayers; i++)
+        {
+            RenderColorBuffer(i);
+        }
+
         mp_SwapChain->Present(0, 0);
+    }
+
+    void GraphicsDx11::SetNumberOfLayers(const uint32_t& layers)
+    {
+        // Validate if the requested number of layers is valid
+        if (layers > 0)
+            m_NumLayers = layers;
+        else // If not set it to minimal valid option
+            m_NumLayers = 1;
+    }
+
+    void GraphicsDx11::SetCamera(Camera* p_Camera)
+    {
+        mp_Camera = (CameraDx11*)p_Camera;
+    }
+
+    void GraphicsDx11::InsertGameObject(GameObject3D* p_GameObject)
+    {
+        if (p_GameObject != nullptr)
+            mv_Objects.push_back(p_GameObject);
+        else
+            LOG_F(WARNING, "Nullptr was passed to InsertGameObject function");
     }
 
     /*
@@ -93,8 +124,12 @@ namespace Mesa
     */
     std::map<std::string, uint32_t> GraphicsDx11::CompileForwardShaderPack(const std::string& packPath)
     {
+        std::string shaderDir = ConfigUtils::GetValueFromConfigCS("Path", "Shader");
+
+        std::string relativePackPath = FileUtils::CombinePaths(shaderDir, packPath);
+
         // Read the contents of the pack
-        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(relativePackPath);
         if (v_PackData.empty()) return std::map<std::string, uint32_t>();
 
         // Search the lookup table for files in this pack
@@ -168,8 +203,12 @@ namespace Mesa
     */
     std::map<std::string, uint32_t> GraphicsDx11::CompileDeferredShaderPack(const std::string& packPath)
     {
+        std::string shaderDir = ConfigUtils::GetValueFromConfigCS("Path", "Shader");
+
+        std::string relativePackPath = FileUtils::CombinePaths(shaderDir, packPath);
+
         // Read the contents of the pack
-        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(relativePackPath);
         if (v_PackData.empty()) return std::map<std::string, uint32_t>();
 
         // Search the lookup table for files in this pack
@@ -243,8 +282,12 @@ namespace Mesa
     */
     std::map<std::string, uint32_t> GraphicsDx11::LoadTexturePack(const std::string& packPath)
     {
+        std::string textureDir = ConfigUtils::GetValueFromConfigCS("Path", "Texture");
+
+        std::string relativePackPath = FileUtils::CombinePaths(textureDir, packPath);
+
         // Read the contents of the pack
-        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(relativePackPath);
         if (v_PackData.empty()) return std::map<std::string, uint32_t>();
 
         // Search the lookup table for files in this pack
@@ -284,6 +327,72 @@ namespace Mesa
 
             // Begin decoding texture on another thread
             v_LoadThreads.push_back(std::thread(GraphicsDx11::LoadTexture, v_DataBuffer, this, v_entries[i].m_OriginalName));
+        }
+
+        // Join all compilation threads
+        for (auto& ldThread : v_LoadThreads)
+        {
+            ldThread.join();
+        }
+
+        std::map<std::string, uint32_t> result;
+
+        // Associate texture ids with their names
+        for (int i = 0; i < v_entries.size(); i++)
+        {
+            result[v_entries[i].m_OriginalName] = GetShaderIdByVertexName(v_entries[i].m_OriginalName);
+        }
+
+        return result;
+    }
+
+    std::map<std::string, uint32_t> GraphicsDx11::LoadModelPack(const std::string& packPath)
+    {
+        std::string modelDir = ConfigUtils::GetValueFromConfigCS("Path", "Model");
+
+        std::string relativePackPath = FileUtils::CombinePaths(modelDir, packPath);
+
+        // Read the contents of the pack
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(relativePackPath);
+        if (v_PackData.empty()) return std::map<std::string, uint32_t>();
+
+        // Search the lookup table for files in this pack
+        auto v_entries = LookUpUtils::LoadSpecificPackInfo(packPath);
+
+        // Calculate number of files in pack
+        uint32_t numFilesInPack = 0;
+        memcpy(&numFilesInPack, &v_PackData[0], sizeof(uint32_t));
+
+        // Validate calculated number of files
+        if (numFilesInPack <= 0) return std::map<std::string, uint32_t>();
+        if (numFilesInPack != v_entries.size()) return std::map<std::string, uint32_t>();
+
+        // Calculate all starting positions for each file
+        std::vector<uint64_t> v_startingPositions;
+
+        for (int i = 0; i < numFilesInPack; i++)
+        {
+            uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * i;
+
+            uint64_t startPos = 0;
+            memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+            v_startingPositions.push_back(startPos - 1);
+        }
+
+        std::vector<std::thread> v_LoadThreads;
+
+        for (int i = 0; i < v_entries.size(); i++)
+        {
+            // Load texture data
+            std::vector<uint8_t> v_DataBuffer;
+            v_DataBuffer.resize(v_entries[i].m_Size);
+
+            uint64_t startPos = v_startingPositions[v_entries[i].m_Index];
+            memcpy(&v_DataBuffer[0], &v_PackData[startPos], v_entries[i].m_Size);
+
+            // Begin decoding texture on another thread
+            v_LoadThreads.push_back(std::thread(GraphicsDx11::LoadModel, v_DataBuffer, this, v_entries[i].m_OriginalName));
         }
 
         // Join all compilation threads
@@ -616,11 +725,172 @@ namespace Mesa
         THROW_IF_FAILED_DX(mp_Device->CreateSamplerState(&desc, mp_Sampler.GetAddressOf()));
     }
 
-    void GraphicsDx11::RenderColorBuffer()
+    /*
+        Initializes the Blend State, which controls how textures are blended together
+    */
+    void GraphicsDx11::InitializeBlendState()
     {
-        float color[4] = { 0.0f, 0.2f, 0.6f, 1.0f };
+        D3D11_RENDER_TARGET_BLEND_DESC rtbd;
+        rtbd.BlendEnable = true;
+        rtbd.SrcBlend = D3D11_BLEND_DEST_ALPHA;
+        rtbd.DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+        rtbd.BlendOp = D3D11_BLEND_OP_ADD;
+        rtbd.SrcBlendAlpha = D3D11_BLEND_ONE;
+        rtbd.DestBlendAlpha = D3D11_BLEND_ZERO;
+        rtbd.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+        rtbd.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+        D3D11_BLEND_DESC desc = {};
+        desc.RenderTarget[0] = rtbd;
+
+        THROW_IF_FAILED_DX(mp_Device->CreateBlendState(&desc, mp_BlendState.GetAddressOf()));
+    }
+
+    /*
+        Processes nodes of the model imported by ASSIMP
+    */
+    void GraphicsDx11::ProcessNode(ModelDx11& outMdl, aiNode* p_Node, const aiScene* p_Scene)
+    {
+        // Go and process each mesh in a node
+        for (size_t i = 0; i < p_Node->mNumMeshes; i++)
+        {
+            outMdl.mv_Meshes.push_back(ProcessMesh(p_Scene->mMeshes[p_Node->mMeshes[i]], p_Scene));
+        }
+
+        // Repeat processing for all child nodes
+        for (size_t i = 0; i < p_Node->mNumChildren; i++)
+        {
+            ProcessNode(outMdl, p_Node->mChildren[i], p_Scene);
+        }
+    }
+
+    /*
+        Processes mesh data and creates vertex and index buffer for it.
+    */
+    MeshDx11 GraphicsDx11::ProcessMesh(aiMesh* p_Mesh, const aiScene* p_Scene)
+    {
+        MeshDx11 mesh;
+
+        std::vector<VertexDx11> v_vertices;
+        std::vector<uint32_t> v_indices;
+
+        // Go through each vertex in a model and copy important data to vectors
+        for (size_t i = 0; i < p_Mesh->mNumVertices; i++)
+        {
+            VertexDx11 vert;
+
+            // Vertex position
+            vert.m_Position.x = p_Mesh->mVertices[i].x;
+            vert.m_Position.y = p_Mesh->mVertices[i].y;
+            vert.m_Position.z = p_Mesh->mVertices[i].z;
+
+            // Vertex normals
+            if (p_Mesh->HasNormals())
+            {
+                vert.m_Normal.x = p_Mesh->mNormals[i].x;
+                vert.m_Normal.y = p_Mesh->mNormals[i].y;
+                vert.m_Normal.z = p_Mesh->mNormals[i].z;
+            }
+            else
+            {
+                vert.m_Normal.x = 0;
+                vert.m_Normal.y = 0;
+                vert.m_Normal.z = 0;
+            }
+
+            // Vertex UV mapping
+            if (p_Mesh->HasTextureCoords(0))
+            {
+                vert.m_TexCoord.x = p_Mesh->mTextureCoords[0][i].x;
+                vert.m_TexCoord.y = p_Mesh->mTextureCoords[0][i].y;
+            }
+            else
+            {
+                vert.m_TexCoord.x = 0;
+                vert.m_TexCoord.y = 0;
+            }
+
+            v_vertices.push_back(vert);
+        }
+
+        // Go through each face of a model and copy its index data
+        for (size_t i = 0; i < p_Mesh->mNumFaces; i++)
+        {
+            aiFace face = p_Mesh->mFaces[i];
+            for (size_t j = 0; j < face.mNumIndices; j++)
+                v_indices.push_back(face.mIndices[j]);
+        }
+
+        bool vertexResult, indexResult;
+
+        // Create index and vertex buffers
+        std::thread vertexThread(GraphicsDx11::CreateVertexBuffer, v_vertices, mesh.mp_VertexBuffer.GetAddressOf(), this, std::ref(vertexResult));
+        std::thread indexThread(GraphicsDx11::CreateIndexBuffer, v_indices, mesh.mp_IndexBuffer.GetAddressOf(), this, std::ref(indexResult));
+
+        vertexThread.join();
+        indexThread.join();
+
+        // Validate creation results
+        if (!vertexResult || !indexResult)
+        {
+            LOG_F(ERROR, "Creation of one or more buffers failed!");
+            return MeshDx11();
+        }
+
+        // Save number of indices
+        mesh.m_NumIndices = v_indices.size();
+
+        return mesh;
+    }
+
+    void GraphicsDx11::RenderColorBuffer(int layer)
+    {
+        float color[4] = { 0.0f, 1.0f, 0.0f, 0.0f };
         mp_Context->ClearRenderTargetView(mp_RenderTarget.Get(), color);
         mp_Context->ClearDepthStencilView(mp_DepthView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+
+        for (auto& object : mv_Objects)
+        {
+            if (object->GetLayer() != layer) continue;
+
+            for (auto& shader : mv_Shaders)
+            {
+                if (shader.GetShaderUID() != object->GetColorShader()) continue;
+
+                mp_Context->VSSetShader(shader.mp_VertexShader.Get(), nullptr, 0);
+                mp_Context->PSSetShader(shader.mp_PixelShader.Get(), nullptr, 0);
+                mp_Context->IASetInputLayout(shader.mp_InputLayout.Get());
+            }
+
+            ConstBufferDx11::MvpBuffer mvp = {};
+
+            if (mp_Camera != nullptr)
+            {
+                float fov = 60.0f / 360.0f * DirectX::XM_PIDIV2;
+                mvp.m_Proj = DirectX::XMMatrixPerspectiveFovLH(fov, 1280.0f / 720.0f, 0.01f, 1000.0f);
+                mvp.m_Proj = mp_Camera->GetProjectionMatrix();
+                mvp.m_View = mp_Camera->GetViewMatrix();
+            }
+
+            for (auto& model : mv_Models)
+            {
+                if (model.GetModelUID() != object->GetModel()) continue;
+
+                mvp.m_Model = ConvertUtils::Mat4x4ToXmMatrix(object->GetWorldMatrix());
+                mp_Context->UpdateSubresource(model.mp_ConstBufferMVP.Get(), 0, nullptr, &mvp, 0, 0);
+                mp_Context->VSSetConstantBuffers(0, 1, model.mp_ConstBufferMVP.GetAddressOf());
+                mp_Context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                
+                for (auto& mesh : model.mv_Meshes)
+                {
+                    UINT stride = sizeof(VertexDx11);
+                    UINT offset = 0;
+                    mp_Context->IASetVertexBuffers(0, 1, mesh.mp_VertexBuffer.GetAddressOf(), &stride, &offset);
+                    mp_Context->IASetIndexBuffer(mesh.mp_IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+                    mp_Context->DrawIndexed(mesh.m_NumIndices, 0, 0);
+                }
+            }
+        }
     }
 
     /*
@@ -631,6 +901,9 @@ namespace Mesa
         // Check if shader isn't loaded already
         if (p_Gfx->GetShaderIdByVertexName(vertexName) != 0)
             return;
+
+        LOG_F(INFO, "Compiling vertex shader: %s", vertexName.c_str());
+        LOG_F(INFO, "Compiling pixel shader: %s", pixelName.c_str());
 
         // Create new shader instance
         ShaderDx11 shader = {};
@@ -839,6 +1112,136 @@ namespace Mesa
         p_Gfx->mv_Textures.push_back(texture);
         p_Gfx->m_TextureIdSemaphore.release();
         LOG_F(INFO, "%s loaded with UID = %u", texture.GetTextureName().c_str(), texture.GetTextureUID());
+        return;
+    }
+
+    /*
+        Imports model data using ASSIMP library
+    */
+    void GraphicsDx11::LoadModel(std::vector<uint8_t> v_ModelData, GraphicsDx11* p_Gfx, std::string modelName)
+    {
+        LOG_F(INFO, "Loading %s", modelName.c_str());
+
+        Assimp::Importer importer;
+
+        // Read raw bytes and treat them as a contents of FBX file
+        const aiScene* p_Scene = importer.ReadFileFromMemory(v_ModelData.data(), v_ModelData.size(), aiProcess_Triangulate | aiProcess_ConvertToLeftHanded, ".fbx");
+
+        // Validate importing results
+        if (p_Scene == nullptr)
+        {
+            LOG_F(ERROR, "Failed to import %s with error %s", modelName.c_str(), importer.GetErrorString());
+            return;
+        }
+
+        ModelDx11 model = {};
+
+        // Process nodes of the model
+        p_Gfx->ProcessNode(model, p_Scene->mRootNode, p_Scene);
+
+        bool bufResult = false;
+
+        // Create constant buffer for MVP matrix
+        GraphicsDx11::CreateEmptyBuffer(sizeof(ConstBufferDx11::MvpBuffer), D3D11_BIND_CONSTANT_BUFFER, D3D11_USAGE_DEFAULT, 0, p_Gfx, model.mp_ConstBufferMVP.GetAddressOf(), bufResult);
+    
+        // Validate constant buffer creation
+        if (!bufResult)
+        {
+            LOG_F(ERROR, "Cration of constant buffer failed!");
+            return;
+        }
+
+        // Fill out the rest of the model details
+        model.m_ModelName = modelName;
+        p_Gfx->m_ModelIdSemaphore.acquire();
+        model.m_ModelUID = p_Gfx->GenerateModelUID();
+        p_Gfx->mv_Models.push_back(model);
+        p_Gfx->m_ModelIdSemaphore.release();
+        LOG_F(INFO, "%s loaded with UID = %u", model.GetModelName().c_str(), model.GetModelUID());
+        return;
+    }
+
+    /*
+        Creates specified DirectX buffer.
+        If creation fails then function throw an exception.
+    */
+    void GraphicsDx11::CreateCriticalBuffer(size_t size, UINT bindFlag, D3D11_USAGE usage, UINT cpuAccess, GraphicsDx11* p_Gfx, ID3D11Buffer** pp_Buffer)
+    {
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = size;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = bindFlag;
+        desc.CPUAccessFlags = 0;
+
+        THROW_IF_FAILED_DX(p_Gfx->mp_Device->CreateBuffer(&desc, nullptr, pp_Buffer));
+    }
+
+    /*
+        Creates DirectX buffer with vertex data.
+        Function returns ture if creation was sucessful or false otherwise
+        via reference bool.
+    */
+    void GraphicsDx11::CreateVertexBuffer(std::vector<VertexDx11> v_verts, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result)
+    {
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = sizeof(VertexDx11) * v_verts.size();
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        desc.CPUAccessFlags = 0;
+
+        D3D11_SUBRESOURCE_DATA data = {};
+        data.pSysMem = v_verts.data();
+
+        if (FAILED(p_Gfx->mp_Device->CreateBuffer(&desc, &data, pp_Buffer)))
+            result = false;
+        else
+            result = true;
+
+        return;
+    }
+
+    /*
+        Creates DirectX buffer with index data.
+        Function returns ture if creation was sucessful or false otherwise
+        via reference bool.
+    */
+    void GraphicsDx11::CreateIndexBuffer(std::vector<uint32_t> v_inds, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result)
+    {
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = sizeof(uint32_t) * v_inds.size();
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+        desc.CPUAccessFlags = 0;
+
+        D3D11_SUBRESOURCE_DATA data = {};
+        data.pSysMem = v_inds.data();
+
+        if (FAILED(p_Gfx->mp_Device->CreateBuffer(&desc, &data, pp_Buffer)))
+            result = false;
+        else
+            result = true;
+
+        return;
+    }
+
+    /*
+        Creates empty DirectX buffer.
+        Function returns ture if creation was sucessful or false otherwise
+        via reference bool.
+    */
+    void GraphicsDx11::CreateEmptyBuffer(size_t size, UINT bindFlag, D3D11_USAGE usage, UINT cpuAccess, GraphicsDx11* p_Gfx, ID3D11Buffer** pp_Buffer, bool& result)
+    {
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = size;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = bindFlag;
+        desc.CPUAccessFlags = 0;
+
+        if (FAILED(p_Gfx->mp_Device->CreateBuffer(&desc, nullptr, pp_Buffer)))
+            result = false;
+        else
+            result = true;
+
         return;
     }
 

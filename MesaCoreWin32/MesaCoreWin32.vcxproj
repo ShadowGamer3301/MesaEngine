@@ -136,14 +136,17 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="include\Mesa\Application.h" />
+    <ClInclude Include="include\Mesa\Camera.h" />
     <ClInclude Include="include\Mesa\CompressionUtils.h" />
     <ClInclude Include="include\Mesa\ConfigUtils.h" />
+    <ClInclude Include="include\Mesa\ConstBuffer.h" />
     <ClInclude Include="include\Mesa\ConvertUtils.h" />
     <ClInclude Include="include\Mesa\Core.h" />
     <ClInclude Include="include\Mesa\Entrypoint.h" />
     <ClInclude Include="include\Mesa\Event.h" />
     <ClInclude Include="include\Mesa\Exception.h" />
     <ClInclude Include="include\Mesa\FileUtils.h" />
+    <ClInclude Include="include\Mesa\GameObject.h" />
     <ClInclude Include="include\Mesa\GfxUtils.h" />
     <ClInclude Include="include\Mesa\Graphics.h" />
     <ClInclude Include="include\Mesa\LookUpUtils.h" />
@@ -151,6 +154,8 @@
     <ClInclude Include="include\Mesa\Window.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="source\Camera.cpp" />
+    <ClCompile Include="source\GameObject.cpp" />
     <ClCompile Include="source\LookUpUtils.cpp" />
     <ClCompile Include="source\Application.cpp" />
     <ClCompile Include="source\CompressionUtils.cpp" />

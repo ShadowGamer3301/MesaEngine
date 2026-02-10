@@ -3,6 +3,8 @@
 #include "Window.h"
 #include "Exception.h"
 #include "GfxUtils.h"
+#include "GameObject.h"
+#include "Camera.h"
 
 namespace Mesa
 {
@@ -14,7 +16,12 @@ namespace Mesa
 
 		virtual void DrawFrame(Window* p_Window) = 0;
 		virtual std::map<std::string, uint32_t> CompileForwardShaderPack(const std::string& packPath) = 0;
+		virtual std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath) = 0;
 		virtual std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath) = 0;
+		virtual std::map<std::string, uint32_t> LoadModelPack(const std::string& packPath) = 0;
+		virtual void SetNumberOfLayers(const uint32_t& layers) = 0;
+		virtual void SetCamera(Camera* p_Camera) = 0;
+		virtual void InsertGameObject(GameObject3D* p_GameObject) = 0;
 	};
 
 	class MSAPI GraphicsDx11Exception : public Exception
@@ -34,12 +41,16 @@ namespace Mesa
 		~GraphicsDx11();
 
 	public: // Frame drawing functions
-		void DrawFrame(Window* p_Window);
+		void DrawFrame(Window* p_Window) override;
+		void SetNumberOfLayers(const uint32_t& layers) override;
+		void SetCamera(Camera* p_Camera) override;
+		void InsertGameObject(GameObject3D* p_GameObject) override;
 
 	public: // Asset loading functions
-		std::map<std::string, uint32_t> CompileForwardShaderPack(const std::string& packPath);
-		std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath);
-		std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath);
+		std::map<std::string, uint32_t> CompileForwardShaderPack(const std::string& packPath) override;
+		std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath) override;
+		std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath) override;
+		std::map<std::string, uint32_t> LoadModelPack(const std::string& packPath) override;
 
 	public: // Getters
 		uint32_t GetShaderIdByVertexName(const std::string& name);
@@ -58,15 +69,25 @@ namespace Mesa
 		void InitializeViewport(uint32_t width, uint32_t height);
 		void InitializeRasterizer();
 		void InitializeSampler();
+		void InitializeBlendState();
+
+	private: // Model data processing
+		void ProcessNode(ModelDx11& outMdl, aiNode* p_Node, const aiScene* p_Scene);
+		MeshDx11 ProcessMesh(aiMesh* p_Mesh, const aiScene* p_Scene);
 
 	private: // Rendering functions
-		void RenderColorBuffer();
+		void RenderColorBuffer(int layer);
 
 	private: // Asynchronus asset loading functions
 		static void CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx, std::string vertexName, std::string pixelName);
 		static void CompileVertexShader(std::vector<uint8_t> v_VertexData, ShaderType type, ID3D11VertexShader** pp_Shader, ID3D11InputLayout** pp_Layout, GraphicsDx11* p_Gfx);
 		static void CompilePixelShader(std::vector<uint8_t> v_PixelData, ShaderType type, ID3D11PixelShader** pp_Shader, GraphicsDx11* p_Gfx);
 		static void LoadTexture(std::vector<uint8_t> v_TextureData, GraphicsDx11* p_Gfx, std::string textureName);
+		static void LoadModel(std::vector<uint8_t> v_ModelData, GraphicsDx11* p_Gfx, std::string modelName);
+		static void CreateCriticalBuffer(size_t size, UINT bindFlag, D3D11_USAGE usage, UINT cpuAccess, GraphicsDx11* p_Gfx, ID3D11Buffer** pp_Buffer);
+		static void CreateVertexBuffer(std::vector<VertexDx11> v_verts, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result);
+		static void CreateIndexBuffer(std::vector<uint32_t> v_inds, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result);
+		static void CreateEmptyBuffer(size_t size, UINT bindFlag, D3D11_USAGE usage, UINT cpuAccess, GraphicsDx11* p_Gfx, ID3D11Buffer** pp_Buffer, bool& result);
 
 	private: // ID generating functions
 		uint32_t GenerateShaderUID();
@@ -93,9 +114,26 @@ namespace Mesa
 		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_DepthBuffer;
 		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_BackBuffer;
 		Microsoft::WRL::ComPtr<ID3D11SamplerState> mp_Sampler;
+		Microsoft::WRL::ComPtr<ID3D11BlendState> mp_BlendState;
+
+	private: // Layer rendering interfaces
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_LayerColorBuffer;
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_PrevLayerColorBuffer;
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_LayerResourceView;
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_PrevLayerResourceView;
 
 	private: // Buffers for loaded assets
 		std::vector<ShaderDx11> mv_Shaders;
 		std::vector<TextureDx11> mv_Textures;
+		std::vector<ModelDx11> mv_Models;
+
+	private: // Vector to hold drawable game objects
+		std::vector<GameObject3D*> mv_Objects;
+
+	private: // Camera related data
+		CameraDx11* mp_Camera = nullptr;
+
+	private: // Data related to layer drawing
+		uint32_t m_NumLayers = 1; // Use only 1 layer by default
 	};
 }
