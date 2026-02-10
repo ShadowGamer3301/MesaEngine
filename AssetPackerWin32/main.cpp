@@ -170,6 +170,7 @@ inline std::string PackData(const std::string& path, const std::string& targetPa
 
 	std::string result = oss.str();
 
+	// Move each archive to its destignated path
 	for (const auto& archive : archivesMap)
 	{
 		std::string newFileName = Mesa::FileUtils::CombinePaths(targetPath, archive.first);
@@ -193,12 +194,15 @@ inline void CreateTree(const std::vector<std::string>& v_Directories)
 
 	for (auto& entry : v_Directories)
 	{
+		// Combine previous directories with current one so the new one can be created inside of them
 		std::string finalDir = Mesa::FileUtils::CombinePaths(prevDirs, entry);
 
 		BOOL result = CreateDirectory(Mesa::ConvertUtils::StringToWideString(finalDir).c_str(), nullptr);
 
+		// Validate creation results
 		if (result == 0)
 		{
+			// If directory existed already don't consider it as an error
 			if (GetLastError() != ERROR_ALREADY_EXISTS)
 			{
 				LOG_F(ERROR, "Failed to create directory: %s", entry.c_str());
@@ -212,18 +216,23 @@ inline void CreateTree(const std::vector<std::string>& v_Directories)
 
 inline void ValidateDirectories()
 {
+	// Get path values from configuration file
 	std::string shaderDir = Mesa::ConfigUtils::GetValueFromConfigCS("PATH", "Shader");
 	std::string modelDir = Mesa::ConfigUtils::GetValueFromConfigCS("PATH", "Model");
 	std::string textureDir = Mesa::ConfigUtils::GetValueFromConfigCS("PATH", "Texture");
 	std::string materialDir = Mesa::ConfigUtils::GetValueFromConfigCS("PATH", "Material");
 
+	// Turn them into a vector of singular directories
 	std::vector<std::string> v_ShaderPath = Mesa::ConvertUtils::SplitStringByChar(shaderDir, '/');
 
+	// Check if directories are not split by backslash
 	if (v_ShaderPath.size() <= 1)
 		v_ShaderPath = Mesa::ConvertUtils::SplitStringByChar(shaderDir, '\\');
 
+	// Create a set of directories for assets to be held in
 	CreateTree(v_ShaderPath);
 
+	// Repeat for all asset types
 	std::vector<std::string> v_TexturePath = Mesa::ConvertUtils::SplitStringByChar(textureDir, '/');
 	if (v_TexturePath.size() <= 1)
 		v_TexturePath = Mesa::ConvertUtils::SplitStringByChar(textureDir, '\\');
@@ -245,9 +254,11 @@ inline void ValidateDirectories()
 
 int main(void) try
 {
+	// Validate if configuration file exists
 	if (!Mesa::FileUtils::FileExists("engine.ini"))
-		Mesa::ConfigUtils::GenerateConfig();
+		Mesa::ConfigUtils::GenerateConfig(); // If it's missing generate new one
 
+	// Validate if target directories exists and if not create them
 	ValidateDirectories();
 
 	std::string lookupData = std::string();
