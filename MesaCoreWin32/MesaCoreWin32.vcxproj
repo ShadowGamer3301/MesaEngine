@@ -154,7 +154,7 @@
     <ClInclude Include="include\Mesa\Window.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="include\Mesa\Camera.cpp" />
+    <ClCompile Include="source\Camera.cpp" />
     <ClCompile Include="source\GameObject.cpp" />
     <ClCompile Include="source\LookUpUtils.cpp" />
     <ClCompile Include="source\Application.cpp" />

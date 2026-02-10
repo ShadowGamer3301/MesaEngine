@@ -15,31 +15,54 @@ namespace Mesa
 	class MSAPI Camera
 	{
 	public:
-		Camera(glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f), float yaw = -90.0f, float pitch = 0.0f);
-        
-        void SetProjectionValues(uint32_t width, uint32_t height, float nearZ, float farZ);
-        void ProcessMovement(CameraMovement direction, float deltaTime = 1.0f);
-        void ProcessRotation(float xoffset, float yoffset, bool constrainPitch = true);
+	};
 
-    private:
-        void UpdateCameraVectors();
-        void UpdateViewMatrix();
+    class MSAPI CameraDx11 : public Camera
+	{
+	public:
+		CameraDx11();
+		void SetProjectionValues(float fov, float aspectRatio, float nz, float fz);
+
+		const DirectX::XMMATRIX& GetViewMatrix() const;
+		const DirectX::XMMATRIX& GetProjectionMatrix() const;
+
+		const DirectX::XMVECTOR& GetPositionVector() const;
+		const DirectX::XMFLOAT3& GetPositionFloat3() const;
+		const DirectX::XMVECTOR& GetRotationVector() const;
+		const DirectX::XMFLOAT3& GetRotationFloat3() const;
+
+		void SetPosition(const DirectX::XMVECTOR& pos);
+		void SetPosition(float x, float y, float z);
+		void AdjustPosition(const DirectX::XMVECTOR& pos);
+		void AdjustPosition(float x, float y, float z);
+		void SetRotation(const DirectX::XMVECTOR& rot);
+		void SetRotation(float x, float y, float z);
+		void AdjustRotation(const DirectX::XMVECTOR& rot);
+		void AdjustRotation(float x, float y, float z);
+		void SetLookAtPos(DirectX::XMFLOAT3 lookAtPos);
+		const DirectX::XMVECTOR& GetForwardVector();
+		const DirectX::XMVECTOR& GetRightVector();
+		const DirectX::XMVECTOR& GetBackwardVector();
+		const DirectX::XMVECTOR& GetLeftVector();
 
 	private:
-        glm::vec3 m_Position;
-        glm::vec3 m_Front;
-        glm::vec3 m_Up;
-        glm::vec3 m_Right;
-        glm::vec3 m_WorldUp;
-        
-        float m_Yaw;
-        float m_Pitch;
+		void UpdateViewMatrix();
+		DirectX::XMVECTOR m_PosVec;
+		DirectX::XMVECTOR m_RotVec;
+		DirectX::XMFLOAT3 m_Pos;
+		DirectX::XMFLOAT3 m_Rot;
+		DirectX::XMMATRIX m_View;
+		DirectX::XMMATRIX m_Proj;
 
-        float m_MovementSpeed;
-        float m_MouseSensitivity;
-        float m_Zoom;
+		const DirectX::XMVECTOR DEFAULT_FORWARD_VECTOR = DirectX::XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+		const DirectX::XMVECTOR DEFAULT_UP_VECTOR = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+		const DirectX::XMVECTOR DEFAULT_BACKWARD_VECTOR = DirectX::XMVectorSet(0.0f, 0.0f, -1.0f, 0.0f);
+		const DirectX::XMVECTOR DEFAULT_LEFT_VECTOR = DirectX::XMVectorSet(-1.0f, 0.0f, 0.0f, 0.0f);
+		const DirectX::XMVECTOR DEFAULT_RIGHT_VECTOR = DirectX::XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
 
-        glm::mat4x4 m_Projection;
-        glm::mat4x4 m_View;
+		DirectX::XMVECTOR m_ForwardVec;
+		DirectX::XMVECTOR m_LeftVec;
+		DirectX::XMVECTOR m_RightVec;
+		DirectX::XMVECTOR m_BackwardVec;
 	};
 }

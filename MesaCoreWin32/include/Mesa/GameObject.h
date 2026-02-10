@@ -3,9 +3,21 @@
 
 namespace Mesa
 {
-	class GameObject3D
+	class MSAPI GameObject3D
 	{
 	public:
+		GameObject3D();
+
+	public: // Getters
+		inline uint32_t GetLayer() const noexcept { return m_Layer; }
+		inline uint32_t GetColorShader() const noexcept { return m_RelatedColorShader; }
+		inline uint32_t GetNormalShader() const noexcept { return m_RelatedNormalShader; }
+		inline uint32_t GetSpecularShader() const noexcept { return m_RelatedSpecularShader; }
+		inline uint32_t GetPositionShader() const noexcept { return m_RelatedPositionShader; }
+		inline glm::mat4x4 GetWorldMatrix() const noexcept { return m_WorldMatrix; }
+		inline uint32_t GetModel() const noexcept { return m_RelatedModel; }
+
+	public: // Setters
 		inline void SetColorShader(const uint32_t& shaderId) noexcept { m_RelatedColorShader = shaderId; }
 		inline void SetNormalShader(const uint32_t& shaderId) noexcept { m_RelatedNormalShader = shaderId; }
 		inline void SetPositionShader(const uint32_t& shaderId) noexcept { m_RelatedPositionShader = shaderId; }
@@ -16,7 +28,6 @@ namespace Mesa
 		inline void SetRotation(const glm::vec3& rot) noexcept { m_Rotation = rot; UpdateWorldMatrix(); }
 		inline void SetScale(const glm::vec3& scale) noexcept { m_Scale = scale; UpdateWorldMatrix(); }
 
-		inline glm::mat4x4 GetWorldMatrix() const noexcept { return m_WorldMatrix; }
 		inline void SetLayer(const uint32_t& layer) noexcept { m_Layer = layer; }
 
 	private:

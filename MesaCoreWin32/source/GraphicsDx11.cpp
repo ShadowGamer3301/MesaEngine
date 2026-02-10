@@ -3,6 +3,7 @@
 #include <Mesa/FileUtils.h>
 #include <Mesa/LookUpUtils.h>
 #include <Mesa/ConstBuffer.h>
+#include <Mesa/ConvertUtils.h>
 
 namespace Mesa
 {
@@ -74,6 +75,9 @@ namespace Mesa
         // Configure the Sampler
         InitializeSampler();
         LOG_F(INFO, "Sampler initialized");
+        // Configure blend state
+        InitializeBlendState();
+        LOG_F(INFO, "Blend state initialized");
     }
 
     GraphicsDx11::~GraphicsDx11()
@@ -85,7 +89,11 @@ namespace Mesa
     */
     void GraphicsDx11::DrawFrame(Window* p_Window)
     {
-        RenderColorBuffer();
+        for (int i = 0; i < m_NumLayers; i++)
+        {
+            RenderColorBuffer(i);
+        }
+
         mp_SwapChain->Present(0, 0);
     }
 
@@ -96,6 +104,19 @@ namespace Mesa
             m_NumLayers = layers;
         else // If not set it to minimal valid option
             m_NumLayers = 1;
+    }
+
+    void GraphicsDx11::SetCamera(Camera* p_Camera)
+    {
+        mp_Camera = (CameraDx11*)p_Camera;
+    }
+
+    void GraphicsDx11::InsertGameObject(GameObject3D* p_GameObject)
+    {
+        if (p_GameObject != nullptr)
+            mv_Objects.push_back(p_GameObject);
+        else
+            LOG_F(WARNING, "Nullptr was passed to InsertGameObject function");
     }
 
     /*
@@ -689,6 +710,27 @@ namespace Mesa
     }
 
     /*
+        Initializes the Blend State, which controls how textures are blended together
+    */
+    void GraphicsDx11::InitializeBlendState()
+    {
+        D3D11_RENDER_TARGET_BLEND_DESC rtbd;
+        rtbd.BlendEnable = true;
+        rtbd.SrcBlend = D3D11_BLEND_DEST_ALPHA;
+        rtbd.DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+        rtbd.BlendOp = D3D11_BLEND_OP_ADD;
+        rtbd.SrcBlendAlpha = D3D11_BLEND_ONE;
+        rtbd.DestBlendAlpha = D3D11_BLEND_ZERO;
+        rtbd.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+        rtbd.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+        D3D11_BLEND_DESC desc = {};
+        desc.RenderTarget[0] = rtbd;
+
+        THROW_IF_FAILED_DX(mp_Device->CreateBlendState(&desc, mp_BlendState.GetAddressOf()));
+    }
+
+    /*
         Processes nodes of the model imported by ASSIMP
     */
     void GraphicsDx11::ProcessNode(ModelDx11& outMdl, aiNode* p_Node, const aiScene* p_Scene)
@@ -785,11 +827,54 @@ namespace Mesa
         return mesh;
     }
 
-    void GraphicsDx11::RenderColorBuffer()
+    void GraphicsDx11::RenderColorBuffer(int layer)
     {
-        float color[4] = { 0.0f, 0.2f, 0.6f, 1.0f };
+        float color[4] = { 0.0f, 1.0f, 0.0f, 0.0f };
         mp_Context->ClearRenderTargetView(mp_RenderTarget.Get(), color);
         mp_Context->ClearDepthStencilView(mp_DepthView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+
+        for (auto& object : mv_Objects)
+        {
+            if (object->GetLayer() != layer) continue;
+
+            for (auto& shader : mv_Shaders)
+            {
+                if (shader.GetShaderUID() != object->GetColorShader()) continue;
+
+                mp_Context->VSSetShader(shader.mp_VertexShader.Get(), nullptr, 0);
+                mp_Context->PSSetShader(shader.mp_PixelShader.Get(), nullptr, 0);
+                mp_Context->IASetInputLayout(shader.mp_InputLayout.Get());
+            }
+
+            ConstBufferDx11::MvpBuffer mvp = {};
+
+            if (mp_Camera != nullptr)
+            {
+                float fov = 60.0f / 360.0f * DirectX::XM_PIDIV2;
+                mvp.m_Proj = DirectX::XMMatrixPerspectiveFovLH(fov, 1280.0f / 720.0f, 0.01f, 1000.0f);
+                mvp.m_Proj = mp_Camera->GetProjectionMatrix();
+                mvp.m_View = mp_Camera->GetViewMatrix();
+            }
+
+            for (auto& model : mv_Models)
+            {
+                if (model.GetModelUID() != object->GetModel()) continue;
+
+                mvp.m_Model = ConvertUtils::Mat4x4ToXmMatrix(object->GetWorldMatrix());
+                mp_Context->UpdateSubresource(model.mp_ConstBufferMVP.Get(), 0, nullptr, &mvp, 0, 0);
+                mp_Context->VSSetConstantBuffers(0, 1, model.mp_ConstBufferMVP.GetAddressOf());
+                mp_Context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                
+                for (auto& mesh : model.mv_Meshes)
+                {
+                    UINT stride = sizeof(VertexDx11);
+                    UINT offset = 0;
+                    mp_Context->IASetVertexBuffers(0, 1, mesh.mp_VertexBuffer.GetAddressOf(), &stride, &offset);
+                    mp_Context->IASetIndexBuffer(mesh.mp_IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+                    mp_Context->DrawIndexed(mesh.m_NumIndices, 0, 0);
+                }
+            }
+        }
     }
 
     /*

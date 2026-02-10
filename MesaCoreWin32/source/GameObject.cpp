@@ -2,6 +2,11 @@
 
 namespace Mesa
 {
+	GameObject3D::GameObject3D()
+	{
+		UpdateWorldMatrix();
+	}
+
 	/*
 		Recalculates world matrix.
 	*/
