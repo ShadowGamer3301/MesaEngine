@@ -175,6 +175,17 @@ inline std::string PackData(const std::string& path, const std::string& targetPa
 	{
 		std::string newFileName = Mesa::FileUtils::CombinePaths(targetPath, archive.first);
 
+		// If the archive already exists replace it with new one
+		if (Mesa::FileUtils::FileExists(newFileName))
+		{
+			BOOL dl = DeleteFile(Mesa::ConvertUtils::StringToWideString(newFileName).c_str());
+			if (dl == 0)
+			{
+				LOG_F(ERROR, "Failed to remove old archive!");
+				throw Mesa::Exception();
+			}
+		}
+
 		BOOL mr = MoveFile(Mesa::ConvertUtils::StringToWideString(archive.first).c_str(), Mesa::ConvertUtils::StringToWideString(newFileName).c_str());
 		if (mr == 0)
 		{
