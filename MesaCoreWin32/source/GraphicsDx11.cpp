@@ -124,8 +124,12 @@ namespace Mesa
     */
     std::map<std::string, uint32_t> GraphicsDx11::CompileForwardShaderPack(const std::string& packPath)
     {
+        std::string shaderDir = ConfigUtils::GetValueFromConfigCS("Path", "Shader");
+
+        std::string relativePackPath = FileUtils::CombinePaths(shaderDir, packPath);
+
         // Read the contents of the pack
-        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(relativePackPath);
         if (v_PackData.empty()) return std::map<std::string, uint32_t>();
 
         // Search the lookup table for files in this pack
@@ -199,8 +203,12 @@ namespace Mesa
     */
     std::map<std::string, uint32_t> GraphicsDx11::CompileDeferredShaderPack(const std::string& packPath)
     {
+        std::string shaderDir = ConfigUtils::GetValueFromConfigCS("Path", "Shader");
+
+        std::string relativePackPath = FileUtils::CombinePaths(shaderDir, packPath);
+
         // Read the contents of the pack
-        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(relativePackPath);
         if (v_PackData.empty()) return std::map<std::string, uint32_t>();
 
         // Search the lookup table for files in this pack
@@ -274,8 +282,12 @@ namespace Mesa
     */
     std::map<std::string, uint32_t> GraphicsDx11::LoadTexturePack(const std::string& packPath)
     {
+        std::string textureDir = ConfigUtils::GetValueFromConfigCS("Path", "Texture");
+
+        std::string relativePackPath = FileUtils::CombinePaths(textureDir, packPath);
+
         // Read the contents of the pack
-        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(relativePackPath);
         if (v_PackData.empty()) return std::map<std::string, uint32_t>();
 
         // Search the lookup table for files in this pack
@@ -336,8 +348,12 @@ namespace Mesa
 
     std::map<std::string, uint32_t> GraphicsDx11::LoadModelPack(const std::string& packPath)
     {
+        std::string modelDir = ConfigUtils::GetValueFromConfigCS("Path", "Model");
+
+        std::string relativePackPath = FileUtils::CombinePaths(modelDir, packPath);
+
         // Read the contents of the pack
-        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(relativePackPath);
         if (v_PackData.empty()) return std::map<std::string, uint32_t>();
 
         // Search the lookup table for files in this pack
@@ -885,6 +901,9 @@ namespace Mesa
         // Check if shader isn't loaded already
         if (p_Gfx->GetShaderIdByVertexName(vertexName) != 0)
             return;
+
+        LOG_F(INFO, "Compiling vertex shader: %s", vertexName.c_str());
+        LOG_F(INFO, "Compiling pixel shader: %s", pixelName.c_str());
 
         // Create new shader instance
         ShaderDx11 shader = {};
