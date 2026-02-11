@@ -51,4 +51,31 @@ namespace Mesa
 
 		return v_result;
 	}
+
+	std::string LookUpUtils::FindFilePack(const std::string& fileName)
+	{
+		std::vector<LookUpEntry> v_entries = LoadLookupTable();
+
+		for (const auto& entry : v_entries)
+		{
+			if (strcmp(entry.m_OriginalName.c_str(), fileName.c_str()) == 0)
+				return entry.m_PackName;
+		}
+
+		return std::string();
+	}
+
+	std::optional<uint32_t> LookUpUtils::FindFileIndex(const std::string& fileName)
+	{
+		std::vector<LookUpEntry> v_entries = LoadLookupTable();
+
+		for (const auto& entry : v_entries)
+		{
+			if (strcmp(entry.m_OriginalName.c_str(), fileName.c_str()) == 0)
+				return entry.m_Index;
+		}
+
+		return std::optional<uint32_t>();
+	}
+
 }

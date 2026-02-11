@@ -3,22 +3,18 @@
 Sandbox::Sandbox()
 {
 	auto shaderpack = mp_Graphics->CompileForwardShaderPack("Forward_Shaders.msdp");
-	mp_Graphics->LoadTexturePack("testTextures.mtp");
-	auto mdlpack = mp_Graphics->LoadModelPack("testModel.mmdp");
+	m_Object.SetColorShader(1);
+
+	uint32_t modelId = mp_Graphics->LoadModelFromPack("Asset_INT/Model/Jill_Stage_5.fbx");
+	if (modelId == 0)
+		throw Mesa::Exception();
+
+	m_Object.SetModel(modelId);
+	m_Object.SetRotation(glm::vec3(0, 180, 0));
+
+	mp_Graphics->InsertGameObject(&m_Object);
 
 	m_Camera.SetProjectionValues(60, mp_Window->GetWindowWidth()/(float)mp_Window->GetWindowHeight(), 0.01f, 1000.0f);
-
-	for (auto& model : mdlpack)
-	{
-		m_Object.SetModel(model.second);
-	}
-
-	for (auto& shader : shaderpack)
-	{
-		m_Object.SetColorShader(shader.second);
-	}
-	m_Object.SetRotation(glm::vec3(0, 180, 0));
-	mp_Graphics->InsertGameObject(&m_Object);
 	mp_Graphics->SetCamera(&m_Camera);
 }
 

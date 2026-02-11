@@ -456,6 +456,61 @@ namespace Mesa
         return result;
     }
 
+    uint32_t GraphicsDx11::LoadModelFromPack(const std::string& originalName)
+    {
+        auto packName = LookUpUtils::FindFilePack(originalName);
+        auto packIndex = LookUpUtils::FindFileIndex(originalName);
+
+        if (packName.empty() || !packIndex.has_value())
+        {
+            LOG_F(ERROR, "Could not find %s in lookup table!", originalName.c_str());
+            return 0;
+        }
+
+        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Model"), packName);
+
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+
+        if (v_PackData.empty())
+        {
+            LOG_F(ERROR, "Could not read %s", packPath.c_str());
+            return 0;
+        }
+
+        uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * packIndex.value();
+
+        if (headerPos >= v_PackData.size())
+        {
+            LOG_F(ERROR, "Invalid header position of %s", originalName.c_str());
+            return 0;
+        }
+
+        uint64_t startPos = 0;
+        memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+        if (startPos <= headerPos)
+        {
+            LOG_F(ERROR, "Invalid starting position of %s", originalName.c_str());
+            return 0;
+        }
+
+        uint32_t fileSize = 0;
+        memcpy(&fileSize, &v_PackData[headerPos + sizeof(uint64_t)], sizeof(uint32_t));
+
+        if(fileSize <= 0)
+        {
+            LOG_F(ERROR, "Invalid size of %s", originalName.c_str());
+            return 0;
+        }
+
+        std::vector<uint8_t> v_ModelData(fileSize);
+        memcpy(&v_ModelData[0], &v_PackData[startPos - 1], fileSize);
+
+        LoadModel(v_ModelData, this, originalName);
+
+        return GetModelIdByName(originalName);
+    }
+
     /*
         Returns shader ID if the its vertex name matches with provided string
     */

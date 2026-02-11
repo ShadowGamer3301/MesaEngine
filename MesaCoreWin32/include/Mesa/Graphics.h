@@ -22,6 +22,7 @@ namespace Mesa
 		virtual void SetNumberOfLayers(const uint32_t& layers) = 0;
 		virtual void SetCamera(Camera* p_Camera) = 0;
 		virtual void InsertGameObject(GameObject3D* p_GameObject) = 0;
+		virtual uint32_t LoadModelFromPack(const std::string& originalName) = 0;
 	};
 
 	class MSAPI GraphicsDx11Exception : public Exception
@@ -52,6 +53,8 @@ namespace Mesa
 		std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath) override;
 		std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath) override;
 		std::map<std::string, uint32_t> LoadModelPack(const std::string& packPath) override;
+
+		uint32_t LoadModelFromPack(const std::string& originalName) override;
 
 	public: // Getters
 		uint32_t GetShaderIdByVertexName(const std::string& name);
