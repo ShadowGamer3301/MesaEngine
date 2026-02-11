@@ -17,6 +17,10 @@ Sandbox::Sandbox()
 
 	mp_Graphics->InsertGameObject(&m_Object);
 
+	uint32_t textureId = mp_Graphics->LoadTextureFromPack("Asset_INT/Texture/Chara000_DM_HQ.png");
+	if (textureId == 0)
+		throw Mesa::Exception();
+
 	m_Camera.SetProjectionValues(60, mp_Window->GetWindowWidth()/(float)mp_Window->GetWindowHeight(), 0.01f, 1000.0f);
 	mp_Graphics->SetCamera(&m_Camera);
 }
@@ -29,8 +33,14 @@ void Sandbox::Run()
 {
 	while (mp_Window->Update())
 	{
+		ManageEvents();
 		mp_Graphics->DrawFrame(mp_Window);
 	}
+}
+
+void Sandbox::ManageEvents()
+{
+	Mesa::EventHandler::ClearEventBuffer();
 }
 
 Mesa::Application* Mesa::NewApplication()
