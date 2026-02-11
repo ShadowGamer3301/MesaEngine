@@ -511,6 +511,96 @@ namespace Mesa
         return GetModelIdByName(originalName);
     }
 
+    uint32_t GraphicsDx11::CompileForwardShaderFromPack(const std::string& vertexName)
+    {
+        auto packName = LookUpUtils::FindFilePack(vertexName);
+
+        if (packName.empty())
+        {
+            LOG_F(ERROR, "Could not find pack with %s", vertexName.c_str());
+            return 0;
+        }
+
+        auto v_FilesInPack = LookUpUtils::GetFileNamesFromPack(packName);
+
+        if (v_FilesInPack.size() <= 1)
+        {
+            LOG_F(ERROR, "Not enough files in %s", packName.c_str());
+            return 0;
+        }
+
+        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Shader"), packName);
+
+        auto vertexIndex = LookUpUtils::FindFileIndex(vertexName);
+        
+        if (!vertexIndex.has_value())
+        {
+            LOG_F(ERROR, "Failed to find %s index", vertexName.c_str());
+            return 0;
+        }
+
+        uint32_t pixelIndex = vertexIndex.value() + 1;
+
+        auto pixelName = LookUpUtils::GetFileNameFromPack(packName, pixelIndex);
+
+        if (pixelName.empty())
+        {
+            LOG_F(ERROR, "Could not read pixel shader name");
+            return 0;
+        }
+
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+
+        if (v_PackData.empty())
+        {
+            LOG_F(ERROR, "Could not read %s", packPath.c_str());
+            return 0;
+        }
+
+        uint32_t vertexHeadPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * vertexIndex.value();
+        uint32_t pixelHeadPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * pixelIndex;
+
+        if (vertexHeadPos >= v_PackData.size() || pixelHeadPos >= v_PackData.size())
+        {
+            LOG_F(ERROR, "Invalid header position of %s", vertexName.c_str());
+            return 0;
+        }
+
+        uint64_t vertexStartPos = 0;
+        uint64_t pixelStartPos = 0;
+
+        memcpy(&vertexStartPos, &v_PackData[vertexHeadPos], sizeof(uint64_t));
+        memcpy(&pixelStartPos, &v_PackData[pixelHeadPos], sizeof(uint64_t));
+
+        if (vertexStartPos <= vertexHeadPos || pixelStartPos <= pixelHeadPos)
+        {
+            LOG_F(ERROR, "Invalid header position of %s", vertexName.c_str());
+            return 0;
+        }
+
+        uint64_t vertexSize = 0;
+        uint64_t pixelSize = 0;
+
+        memcpy(&vertexSize, &v_PackData[vertexHeadPos + sizeof(uint64_t)], sizeof(uint32_t));
+        memcpy(&pixelSize, &v_PackData[pixelHeadPos + sizeof(uint64_t)], sizeof(uint32_t));
+
+        if (vertexSize <= 0 || pixelSize <= 0)
+        {
+            LOG_F(ERROR, "Invalid size of %s", vertexName.c_str());
+            return 0;
+        }
+
+        std::vector<uint8_t> v_VertexData(vertexSize);
+        std::vector<uint8_t> v_PixelData(pixelSize);
+
+        memcpy(&v_VertexData[0], &v_PackData[vertexStartPos - 1], vertexSize);
+        memcpy(&v_PixelData[0], &v_PackData[pixelStartPos - 1], pixelSize);
+
+        CompileShader(v_VertexData, v_PixelData, ShaderType_Forward, this, vertexName, pixelName);
+
+        return GetShaderIdByVertexName(vertexName);
+    }
+
     /*
         Returns shader ID if the its vertex name matches with provided string
     */

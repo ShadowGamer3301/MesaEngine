@@ -2,8 +2,11 @@
 
 Sandbox::Sandbox()
 {
-	auto shaderpack = mp_Graphics->CompileForwardShaderPack("Forward_Shaders.msdp");
-	m_Object.SetColorShader(1);
+	uint32_t shaderId = mp_Graphics->CompileForwardShaderFromPack("Asset_INT/Shader/V_WorldView.hlsl");
+	if (shaderId == 0)
+		throw Mesa::Exception();
+
+	m_Object.SetColorShader(shaderId);
 
 	uint32_t modelId = mp_Graphics->LoadModelFromPack("Asset_INT/Model/Jill_Stage_5.fbx");
 	if (modelId == 0)
