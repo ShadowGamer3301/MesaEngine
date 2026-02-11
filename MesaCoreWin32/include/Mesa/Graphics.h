@@ -56,6 +56,7 @@ namespace Mesa
 		uint32_t GetShaderIdByVertexName(const std::string& name);
 		uint32_t GetShaderIdByPixelName(const std::string& name);
 		uint32_t GetTextureIdByName(const std::string& name);
+		uint32_t GetModelIdByName(const std::string& name);
 
 	private: // Pipeline initialization functions
 		void InitializeFactory();
