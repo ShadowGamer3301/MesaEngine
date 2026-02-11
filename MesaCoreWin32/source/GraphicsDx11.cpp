@@ -384,14 +384,14 @@ namespace Mesa
 
         for (int i = 0; i < v_entries.size(); i++)
         {
-            // Load texture data
+            // Load model data
             std::vector<uint8_t> v_DataBuffer;
             v_DataBuffer.resize(v_entries[i].m_Size);
 
             uint64_t startPos = v_startingPositions[v_entries[i].m_Index];
             memcpy(&v_DataBuffer[0], &v_PackData[startPos], v_entries[i].m_Size);
 
-            // Begin decoding texture on another thread
+            // Begin importing models on another thread
             v_LoadThreads.push_back(std::thread(GraphicsDx11::LoadModel, v_DataBuffer, this, v_entries[i].m_OriginalName));
         }
 
@@ -403,10 +403,10 @@ namespace Mesa
 
         std::map<std::string, uint32_t> result;
 
-        // Associate texture ids with their names
+        // Associate model ids with their names
         for (int i = 0; i < v_entries.size(); i++)
         {
-            result[v_entries[i].m_OriginalName] = GetShaderIdByVertexName(v_entries[i].m_OriginalName);
+            result[v_entries[i].m_OriginalName] = GetModelIdByName(v_entries[i].m_OriginalName);
         }
 
         return result;
@@ -447,13 +447,28 @@ namespace Mesa
     */
     uint32_t GraphicsDx11::GetTextureIdByName(const std::string& name)
     {
-        for (const auto& shader : mv_Shaders)
+        for (const auto& texture : mv_Textures)
         {
-            if (strcmp(shader.GetPixelShaderName().c_str(), name.c_str()) == 0)
-                return shader.GetShaderUID();
+            if (strcmp(texture.GetTextureName().c_str(), name.c_str()) == 0)
+                return texture.GetTextureUID();
         }
 
         // If texture ID can't be found return 0 to indicate that the texture isn't loaded
+        return 0;
+    }
+
+    /*
+        Returns model ID if the its name matches with provided string
+    */
+    uint32_t GraphicsDx11::GetModelIdByName(const std::string& name)
+    {
+        for (const auto& model : mv_Models)
+        {
+            if (strcmp(model.GetModelName().c_str(), name.c_str()) == 0)
+                return model.GetModelUID();
+        }
+
+        // If model ID can't be found return 0 to indicate that the texture isn't loaded
         return 0;
     }
 
@@ -1309,9 +1324,36 @@ namespace Mesa
         return id;
     }
 
+    /*
+        Generate unique model ID
+    */
     uint32_t GraphicsDx11::GenerateModelUID()
     {
-        return 0;
+        // If no models have been loaded yet don't bother looking for free ID and simply give it 1
+        if (mv_Models.empty()) return 1;
+
+        // Start search with ID of 1 - (0 will be reserved for fallback model)
+        uint32_t id = 1;
+        bool idFound = false;
+
+        do {
+            idFound = false;
+
+            for (auto& model : mv_Models)
+            {
+                // Check if ID is already in use
+                if (model.m_ModelUID == id)
+                    idFound = true;
+            }
+
+            // If ID is in use increment target ID and repeat the search
+            if (idFound)
+                id++;
+
+        } while (idFound);
+
+        // Return free ID
+        return id;
     }
 
     uint32_t GraphicsDx11::GenerateMaterialUID()
