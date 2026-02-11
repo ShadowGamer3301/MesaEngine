@@ -456,19 +456,25 @@ namespace Mesa
         return result;
     }
 
+    /*
+        Loads specifed model from a model pack
+    */
     uint32_t GraphicsDx11::LoadModelFromPack(const std::string& originalName)
     {
+        // Use lookup table to find in which pack the model is contained in
+        // and what index it has
         auto packName = LookUpUtils::FindFilePack(originalName);
         auto packIndex = LookUpUtils::FindFileIndex(originalName);
 
+        // Validate lookup results
         if (packName.empty() || !packIndex.has_value())
         {
             LOG_F(ERROR, "Could not find %s in lookup table!", originalName.c_str());
             return 0;
         }
 
+        // Read pack contents
         std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Model"), packName);
-
         std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
 
         if (v_PackData.empty())
@@ -477,52 +483,63 @@ namespace Mesa
             return 0;
         }
 
+        // Calculate where file details are
         uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * packIndex.value();
 
+        // Validate calculation results
         if (headerPos >= v_PackData.size())
         {
             LOG_F(ERROR, "Invalid header position of %s", originalName.c_str());
             return 0;
         }
 
+        // Calculate where file data starts
         uint64_t startPos = 0;
         memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
 
+        // Validate calculation results
         if (startPos <= headerPos)
         {
             LOG_F(ERROR, "Invalid starting position of %s", originalName.c_str());
             return 0;
         }
 
+        // Grab file size
         uint32_t fileSize = 0;
         memcpy(&fileSize, &v_PackData[headerPos + sizeof(uint64_t)], sizeof(uint32_t));
 
+        // Validate file size
         if(fileSize <= 0)
         {
             LOG_F(ERROR, "Invalid size of %s", originalName.c_str());
             return 0;
         }
 
+        // Load model data
         std::vector<uint8_t> v_ModelData(fileSize);
         memcpy(&v_ModelData[0], &v_PackData[startPos - 1], fileSize);
 
+        // Import loaded data using ASSIMP
         LoadModel(v_ModelData, this, originalName);
 
         return GetModelIdByName(originalName);
     }
 
+    /*
+        Compiles a specifed forward rendering shader from a shader pack
+    */
     uint32_t GraphicsDx11::CompileForwardShaderFromPack(const std::string& vertexName)
     {
+        // Find pack that contains specified file
         auto packName = LookUpUtils::FindFilePack(vertexName);
-
         if (packName.empty())
         {
             LOG_F(ERROR, "Could not find pack with %s", vertexName.c_str());
             return 0;
         }
 
+        // Check if the pack also contains pixel shader
         auto v_FilesInPack = LookUpUtils::GetFileNamesFromPack(packName);
-
         if (v_FilesInPack.size() <= 1)
         {
             LOG_F(ERROR, "Not enough files in %s", packName.c_str());
@@ -531,71 +548,83 @@ namespace Mesa
 
         std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Shader"), packName);
 
+        // Calculate pixel shader position using vertex shader index
         auto vertexIndex = LookUpUtils::FindFileIndex(vertexName);
-        
         if (!vertexIndex.has_value())
         {
             LOG_F(ERROR, "Failed to find %s index", vertexName.c_str());
             return 0;
         }
 
+        // Since it is required that pixel shader is right after the vertex
+        // shader assume it is the next file in pack
         uint32_t pixelIndex = vertexIndex.value() + 1;
 
+        // Grab pixel shader name
         auto pixelName = LookUpUtils::GetFileNameFromPack(packName, pixelIndex);
-
         if (pixelName.empty())
         {
             LOG_F(ERROR, "Could not read pixel shader name");
             return 0;
         }
 
+        // Load pack contents
         std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
 
+        // Validate loading results
         if (v_PackData.empty())
         {
             LOG_F(ERROR, "Could not read %s", packPath.c_str());
             return 0;
         }
 
+        // Calculate header positions
         uint32_t vertexHeadPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * vertexIndex.value();
         uint32_t pixelHeadPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * pixelIndex;
 
+        // Validate header positions
         if (vertexHeadPos >= v_PackData.size() || pixelHeadPos >= v_PackData.size())
         {
             LOG_F(ERROR, "Invalid header position of %s", vertexName.c_str());
             return 0;
         }
 
+        // Calculate where the data actually begins
         uint64_t vertexStartPos = 0;
         uint64_t pixelStartPos = 0;
 
         memcpy(&vertexStartPos, &v_PackData[vertexHeadPos], sizeof(uint64_t));
         memcpy(&pixelStartPos, &v_PackData[pixelHeadPos], sizeof(uint64_t));
 
+        // Validate calculation results
         if (vertexStartPos <= vertexHeadPos || pixelStartPos <= pixelHeadPos)
         {
             LOG_F(ERROR, "Invalid header position of %s", vertexName.c_str());
             return 0;
         }
 
+        // Grab file sizes
         uint64_t vertexSize = 0;
         uint64_t pixelSize = 0;
 
         memcpy(&vertexSize, &v_PackData[vertexHeadPos + sizeof(uint64_t)], sizeof(uint32_t));
         memcpy(&pixelSize, &v_PackData[pixelHeadPos + sizeof(uint64_t)], sizeof(uint32_t));
 
+        // Validate file sizes
         if (vertexSize <= 0 || pixelSize <= 0)
         {
             LOG_F(ERROR, "Invalid size of %s", vertexName.c_str());
             return 0;
         }
 
+        // Load actuall shader data from pack
         std::vector<uint8_t> v_VertexData(vertexSize);
         std::vector<uint8_t> v_PixelData(pixelSize);
 
         memcpy(&v_VertexData[0], &v_PackData[vertexStartPos - 1], vertexSize);
         memcpy(&v_PixelData[0], &v_PackData[pixelStartPos - 1], pixelSize);
 
+        // Compile shaders
         CompileShader(v_VertexData, v_PixelData, ShaderType_Forward, this, vertexName, pixelName);
 
         return GetShaderIdByVertexName(vertexName);
@@ -927,6 +956,8 @@ namespace Mesa
 
         // Create the immutable sampler state object on the GPU.
         THROW_IF_FAILED_DX(mp_Device->CreateSamplerState(&desc, mp_Sampler.GetAddressOf()));
+
+        mp_Context->PSSetSamplers(0, 1, mp_Sampler.GetAddressOf());
     }
 
     /*

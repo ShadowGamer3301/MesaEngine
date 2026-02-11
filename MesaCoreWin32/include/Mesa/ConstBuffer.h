@@ -11,5 +11,12 @@ namespace Mesa
 			DirectX::XMMATRIX m_View;
 			DirectX::XMMATRIX m_Proj;
 		};
+
+		struct alignas(16) MaterialBuffer
+		{
+			DirectX::XMFLOAT4 m_BaseColor;
+			DirectX::XMFLOAT4 m_SubColor;
+			float m_SpecularPower;
+		};
 	}
 }
