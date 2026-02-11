@@ -106,4 +106,16 @@ namespace Mesa
 		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_ConstBufferMVP;
 		std::vector<MeshDx11> mv_Meshes;
 	};
+
+	class MSAPI Material
+	{
+		friend class GraphicsDx11;
+	private:
+		float m_SpecularPower = 1.0f;
+		glm::vec4 m_BaseColor = glm::vec4(1.0f);
+		glm::vec4 m_SubColor = glm::vec4(1.0f);
+		uint32_t m_NormalTextureId = 0;
+		uint32_t m_DiffuseTextureId = 0;
+		uint32_t m_SpecularTextureId = 0;
+	};
 }
