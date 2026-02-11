@@ -80,6 +80,50 @@ namespace Mesa
         LOG_F(INFO, "Blend state initialized");
     }
 
+    /*
+        Constructor: initializes DirectX 11 rendering pipeline.
+        Intended to be used with non-GLFW windows
+    */
+    GraphicsDx11::GraphicsDx11(HWND hWnd, uint32_t width, uint32_t height)
+    {
+        LOG_F(INFO, "Initializing DirectX 11 renderer...");
+
+        // Initialize DXGI Factory to retrieve an adapter.
+        InitializeFactory();
+        LOG_F(INFO, "DXGI Factory initialized");
+
+        // Identify the physical hardware (GPU) to be used for rendering.
+        mp_Adapter = FindSuitableAdapter();
+        // Create the logical Device (resource creator) and Context (command issuer).
+        InitializeDevice();
+        LOG_F(INFO, "Device and device context initialized");
+        // Create the Swap Chain to manage front/back buffers for the given window.
+        InitializeSwapChain(hWnd, width, height);
+        LOG_F(INFO, "SwapChain initialized");
+        // Set up Depth/Stencil infrastructure (Z-Buffer).
+        InitializeDepthBuffer(width, height);
+        LOG_F(INFO, "Depth/stencil buffer initialized");
+        InitializeDepthState();
+        LOG_F(INFO, "Depth/stencil state initialized");
+        InitializeDepthView();
+        LOG_F(INFO, "Depth/stencil view initialized ");
+        // Initialize the Render Target View (RTV).
+        InitializeRenderTargetView();
+        LOG_F(INFO, "Render target view initialized ");
+        // Define the Viewport to map 3D clip space to the 2D window pixel area.
+        InitializeViewport(width, height);
+        LOG_F(INFO, "Viewport initialized ");
+        // Configure the Rasterizer (Culling, Fill Mode, etc.).
+        InitializeRasterizer();
+        LOG_F(INFO, "Rasterizer initialized");
+        // Configure the Sampler
+        InitializeSampler();
+        LOG_F(INFO, "Sampler initialized");
+        // Configure blend state
+        InitializeBlendState();
+        LOG_F(INFO, "Blend state initialized");
+    }
+
     GraphicsDx11::~GraphicsDx11()
     {
     }

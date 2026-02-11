@@ -38,6 +38,7 @@ namespace Mesa
 	{
 	public:
 		GraphicsDx11(Window* p_Window);
+		GraphicsDx11(HWND hWnd, uint32_t width, uint32_t height);
 		~GraphicsDx11();
 
 	public: // Frame drawing functions
