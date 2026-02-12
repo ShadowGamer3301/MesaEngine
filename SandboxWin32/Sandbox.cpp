@@ -2,6 +2,8 @@
 
 Sandbox::Sandbox()
 {
+	mp_Graphics->CompileForwardShaderPack("MesaForwardShaders.msdp");
+
 	uint32_t shaderId = mp_Graphics->CompileForwardShaderFromPack("Asset_INT/Shader/V_WorldView.hlsl");
 	if (shaderId == 0)
 		throw Mesa::Exception();

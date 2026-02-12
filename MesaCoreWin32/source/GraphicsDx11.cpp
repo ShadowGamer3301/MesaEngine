@@ -1548,6 +1548,167 @@ namespace Mesa
         return;
     }
 
+    void GraphicsDx11::CreateMaterial(std::vector<uint8_t> v_MatData, GraphicsDx11* p_Gfx, std::string matName)
+    {
+        std::string matText = std::string(v_MatData.begin(), v_MatData.end());
+
+        // Split material text into single lines
+        std::vector<std::string> v_Lines = ConvertUtils::SplitStringByChar(matText, '\n');
+
+        Material material = {};
+        glm::vec4 baseColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        glm::vec4 subColor = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+        float specPower = 1.0f;
+        std::string diffTex, normTex, specTex;
+
+        // Create threads that texture loading functions will be sent to
+        std::thread diffThread, normThread, specThread;
+
+        for (const auto& line : v_Lines)
+        {
+            // Skip lines that are empty or simply have only newline character
+            if (line.empty() || strcmp(line.c_str(), "\n") == 0) continue;
+
+            // Split line into single words
+            std::vector<std::string> v_Words = ConvertUtils::SplitStringByChar(line, ' ');
+
+            // Skip line that have only one word since all parameters require at least two
+            if (v_Words.size() <= 1) continue;
+
+            // Base color parameters
+            if (strcmp(v_Words[0].c_str(), "$base_r") == 0) baseColor.x = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$base_g") == 0) baseColor.y = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$base_b") == 0) baseColor.z = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$base_a") == 0) baseColor.w = ConvertUtils::StringToFloat(v_Words[1]);
+            // Sub color parameters
+            else if (strcmp(v_Words[0].c_str(), "$sub_r") == 0) subColor.x = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$sub_g") == 0) subColor.y = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$sub_b") == 0) subColor.z = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$sub_a") == 0) subColor.w = ConvertUtils::StringToFloat(v_Words[1]);
+            // Specular data
+            else if (strcmp(v_Words[0].c_str(), "$specular") == 0) specPower = ConvertUtils::StringToFloat(v_Words[1]);
+            // Texture data
+            else if (strcmp(v_Words[0].c_str(), "$diffuseTex") == 0)
+            {
+                diffThread = std::thread(LoadTextureFromPackAsync, v_Words[1], p_Gfx);
+                diffTex = v_Words[1];
+            }
+            else if (strcmp(v_Words[0].c_str(), "$specularTex") == 0)
+            {
+                specThread = std::thread(LoadTextureFromPackAsync, v_Words[1], p_Gfx);
+                specTex = v_Words[1];
+            }
+            else if (strcmp(v_Words[0].c_str(), "$normalTex") == 0)
+            {
+                normThread = std::thread(LoadTextureFromPackAsync, v_Words[1], p_Gfx);
+                specTex = v_Words[1];
+            }
+        }
+
+        // Check if other threads were started and if yes join them
+        if (normThread.get_id() != std::thread::id()) {
+            if (normThread.joinable())
+                normThread.join();
+            else
+                LOG_F(ERROR, "Normal thread was started but is not joinable!");
+        }
+
+        if (diffThread.get_id() != std::thread::id()) {
+            if (diffThread.joinable())
+                diffThread.join();
+            else
+                LOG_F(ERROR, "Diffuse thread was started but is not joinable!");
+        }
+
+        if (specThread.get_id() != std::thread::id()) {
+            if (specThread.joinable())
+                specThread.join();
+            else
+                LOG_F(ERROR, "Specular thread was started but is not joinable!");
+        }
+
+        // Set material properties
+        material.SetBaseColor(baseColor);
+        material.SetSubColor(subColor);
+        material.SetSpecularPower(specPower);
+        material.SetDiffuseTextureId(p_Gfx->GetTextureIdByName(diffTex));
+        material.SetSpecularTextureId(p_Gfx->GetTextureIdByName(specTex));
+        material.SetNormalTextureId(p_Gfx->GetTextureIdByName(normTex));
+
+        // Add material to Graphics class instance
+        p_Gfx->m_MaterialIdSemaphore.acquire();
+        material.m_MaterialId = p_Gfx->GenerateMaterialUID();
+        p_Gfx->mv_Materials.push_back(material);
+        p_Gfx->m_MaterialIdSemaphore.release();
+    }
+
+    /*
+        Load specifed texture. 
+        Indended for asynchronous use.
+    */
+    void GraphicsDx11::LoadTextureFromPackAsync(std::string originalName, GraphicsDx11* p_Gfx)
+    {
+        // Use lookup table to find in which pack the texture is contained in
+            // and what index it has
+        auto packName = LookUpUtils::FindFilePack(originalName);
+        auto packIndex = LookUpUtils::FindFileIndex(originalName);
+
+        // Validate lookup results
+        if (packName.empty() || !packIndex.has_value())
+        {
+            LOG_F(ERROR, "Could not find %s in lookup table!", originalName.c_str());
+            return;
+        }
+
+        // Read pack contents
+        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Texture"), packName);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+
+        if (v_PackData.empty())
+        {
+            LOG_F(ERROR, "Could not read %s", packPath.c_str());
+            return;
+        }
+
+        // Calculate where file details are
+        uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * packIndex.value();
+
+        // Validate calculation results
+        if (headerPos >= v_PackData.size())
+        {
+            LOG_F(ERROR, "Invalid header position of %s", originalName.c_str());
+            return;
+        }
+
+        // Calculate where file data starts
+        uint64_t startPos = 0;
+        memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+        // Validate calculation results
+        if (startPos <= headerPos)
+        {
+            LOG_F(ERROR, "Invalid starting position of %s", originalName.c_str());
+            return;
+        }
+
+        // Grab file size
+        uint32_t fileSize = 0;
+        memcpy(&fileSize, &v_PackData[headerPos + sizeof(uint64_t)], sizeof(uint32_t));
+
+        // Validate file size
+        if (fileSize <= 0)
+        {
+            LOG_F(ERROR, "Invalid size of %s", originalName.c_str());
+            return;
+        }
+
+        // Load texture data
+        std::vector<uint8_t> v_TextureData(fileSize);
+        memcpy(&v_TextureData[0], &v_PackData[startPos - 1], fileSize);
+
+        LoadTexture(v_TextureData, p_Gfx, originalName);
+    }
+
     /*
         Generate unique shader ID
     */

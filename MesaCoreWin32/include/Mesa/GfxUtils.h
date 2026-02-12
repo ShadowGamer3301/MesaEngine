@@ -125,6 +125,7 @@ namespace Mesa
 		inline uint32_t GetSpecularTextureId() const noexcept { return m_SpecularTextureId; }
 		inline uint32_t GetNormalTextureId() const noexcept { return m_NormalTextureId; }
 		inline uint32_t GetDiffuseTextureId() const noexcept { return m_DiffuseTextureId; }
+		inline uint32_t GetMaterialId() const noexcept { return m_MaterialId; }
 
 	private:
 		float m_SpecularPower = 1.0f;
@@ -133,5 +134,6 @@ namespace Mesa
 		uint32_t m_NormalTextureId = 0;
 		uint32_t m_DiffuseTextureId = 0;
 		uint32_t m_SpecularTextureId = 0;
+		uint32_t m_MaterialId = 0;
 	};
 }

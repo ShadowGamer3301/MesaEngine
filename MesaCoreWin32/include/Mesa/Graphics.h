@@ -97,6 +97,8 @@ namespace Mesa
 		static void CreateVertexBuffer(std::vector<VertexDx11> v_verts, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result);
 		static void CreateIndexBuffer(std::vector<uint32_t> v_inds, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result);
 		static void CreateEmptyBuffer(size_t size, UINT bindFlag, D3D11_USAGE usage, UINT cpuAccess, GraphicsDx11* p_Gfx, ID3D11Buffer** pp_Buffer, bool& result);
+		static void CreateMaterial(std::vector<uint8_t> v_MatData, GraphicsDx11* p_Gfx, std::string matName);
+		static void LoadTextureFromPackAsync(std::string originalName, GraphicsDx11* p_Gfx);
 
 	private: // ID generating functions
 		uint32_t GenerateShaderUID();
@@ -135,6 +137,7 @@ namespace Mesa
 		std::vector<ShaderDx11> mv_Shaders;
 		std::vector<TextureDx11> mv_Textures;
 		std::vector<ModelDx11> mv_Models;
+		std::vector<Material> mv_Materials;
 
 	private: // Vector to hold drawable game objects
 		std::vector<GameObject3D*> mv_Objects;
