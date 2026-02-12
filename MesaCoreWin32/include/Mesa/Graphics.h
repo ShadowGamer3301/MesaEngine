@@ -19,6 +19,7 @@ namespace Mesa
 		virtual std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath) = 0;
 		virtual std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath) = 0;
 		virtual std::map<std::string, uint32_t> LoadModelPack(const std::string& packPath) = 0;
+		virtual std::map<std::string, uint32_t> LoadMaterialPack(const std::string& packPath) = 0;
 		virtual void SetNumberOfLayers(const uint32_t& layers) = 0;
 		virtual void SetCamera(Camera* p_Camera) = 0;
 		virtual void InsertGameObject(GameObject3D* p_GameObject) = 0;
@@ -55,6 +56,7 @@ namespace Mesa
 		std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath) override;
 		std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath) override;
 		std::map<std::string, uint32_t> LoadModelPack(const std::string& packPath) override;
+		std::map<std::string, uint32_t> LoadMaterialPack(const std::string& packPath) override;
 
 		uint32_t LoadModelFromPack(const std::string& originalName) override;
 		uint32_t CompileForwardShaderFromPack(const std::string& vertexName) override;
@@ -65,6 +67,7 @@ namespace Mesa
 		uint32_t GetShaderIdByPixelName(const std::string& name);
 		uint32_t GetTextureIdByName(const std::string& name);
 		uint32_t GetModelIdByName(const std::string& name);
+		uint32_t GetMaterialIdByName(const std::string& name);
 
 	private: // Pipeline initialization functions
 		void InitializeFactory();

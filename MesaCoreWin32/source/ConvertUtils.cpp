@@ -129,4 +129,11 @@ namespace Mesa
 	{
 		return DirectX::XMFLOAT3(data.x, data.y, data.z);
 	}
+
+	std::string ConvertUtils::RemoveCharFromString(const std::string& s, char c)
+	{
+		std::string str = s;
+		str.erase(std::remove(str.begin(), str.end(), c), str.end());
+		return str;
+	}
 }

@@ -322,13 +322,13 @@ namespace Mesa
     }
 
     /*
-        Loads texture packs from archive
+        Loads textures from archive
     */
     std::map<std::string, uint32_t> GraphicsDx11::LoadTexturePack(const std::string& packPath)
     {
-        std::string textureDir = ConfigUtils::GetValueFromConfigCS("Path", "Texture");
+        std::string matDir = ConfigUtils::GetValueFromConfigCS("Path", "Texture");
 
-        std::string relativePackPath = FileUtils::CombinePaths(textureDir, packPath);
+        std::string relativePackPath = FileUtils::CombinePaths(matDir, packPath);
 
         // Read the contents of the pack
         std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(relativePackPath);
@@ -369,7 +369,7 @@ namespace Mesa
             uint64_t startPos = v_startingPositions[v_entries[i].m_Index];
             memcpy(&v_DataBuffer[0], &v_PackData[startPos], v_entries[i].m_Size);
 
-            // Begin decoding texture on another thread
+            // Begin decoding material on another thread
             v_LoadThreads.push_back(std::thread(GraphicsDx11::LoadTexture, v_DataBuffer, this, v_entries[i].m_OriginalName));
         }
 
@@ -390,6 +390,9 @@ namespace Mesa
         return result;
     }
 
+    /*
+       Loads model from archive
+    */
     std::map<std::string, uint32_t> GraphicsDx11::LoadModelPack(const std::string& packPath)
     {
         std::string modelDir = ConfigUtils::GetValueFromConfigCS("Path", "Model");
@@ -451,6 +454,75 @@ namespace Mesa
         for (int i = 0; i < v_entries.size(); i++)
         {
             result[v_entries[i].m_OriginalName] = GetModelIdByName(v_entries[i].m_OriginalName);
+        }
+
+        return result;
+    }
+
+    /*
+       Loads material from archive
+    */
+    std::map<std::string, uint32_t> GraphicsDx11::LoadMaterialPack(const std::string& packPath)
+    {
+        std::string modelDir = ConfigUtils::GetValueFromConfigCS("Path", "Material");
+
+        std::string relativePackPath = FileUtils::CombinePaths(modelDir, packPath);
+
+        // Read the contents of the pack
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(relativePackPath);
+        if (v_PackData.empty()) return std::map<std::string, uint32_t>();
+
+        // Search the lookup table for files in this pack
+        auto v_entries = LookUpUtils::LoadSpecificPackInfo(packPath);
+
+        // Calculate number of files in pack
+        uint32_t numFilesInPack = 0;
+        memcpy(&numFilesInPack, &v_PackData[0], sizeof(uint32_t));
+
+        // Validate calculated number of files
+        if (numFilesInPack <= 0) return std::map<std::string, uint32_t>();
+        if (numFilesInPack != v_entries.size()) return std::map<std::string, uint32_t>();
+
+        // Calculate all starting positions for each file
+        std::vector<uint64_t> v_startingPositions;
+
+        for (int i = 0; i < numFilesInPack; i++)
+        {
+            uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * i;
+
+            uint64_t startPos = 0;
+            memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+            v_startingPositions.push_back(startPos - 1);
+        }
+
+        std::vector<std::thread> v_LoadThreads;
+
+        for (int i = 0; i < v_entries.size(); i++)
+        {
+            // Load model data
+            std::vector<uint8_t> v_DataBuffer;
+            v_DataBuffer.resize(v_entries[i].m_Size);
+
+            uint64_t startPos = v_startingPositions[v_entries[i].m_Index];
+            memcpy(&v_DataBuffer[0], &v_PackData[startPos], v_entries[i].m_Size);
+
+            // Begin importing models on another thread
+            v_LoadThreads.push_back(std::thread(GraphicsDx11::CreateMaterial, v_DataBuffer, this, v_entries[i].m_OriginalName));
+        }
+
+        // Join all compilation threads
+        for (auto& ldThread : v_LoadThreads)
+        {
+            ldThread.join();
+        }
+
+        std::map<std::string, uint32_t> result;
+
+        // Associate model ids with their names
+        for (int i = 0; i < v_entries.size(); i++)
+        {
+            result[v_entries[i].m_OriginalName] = GetMaterialIdByName(v_entries[i].m_OriginalName);
         }
 
         return result;
@@ -754,7 +826,22 @@ namespace Mesa
                 return model.GetModelUID();
         }
 
-        // If model ID can't be found return 0 to indicate that the texture isn't loaded
+        // If model ID can't be found return 0 to indicate that the model isn't loaded
+        return 0;
+    }
+
+    /*
+        Returns material ID if the its name matches with provided string
+    */
+    uint32_t GraphicsDx11::GetMaterialIdByName(const std::string& name)
+    {
+        for (const auto& material : mv_Materials)
+        {
+            if (strcmp(material.GetMaterialName().c_str(), name.c_str()) == 0)
+                return material.GetMaterialUID();
+        }
+
+        // If model ID can't be found return 0 to indicate that the material isn't loaded
         return 0;
     }
 
@@ -1551,6 +1638,7 @@ namespace Mesa
     void GraphicsDx11::CreateMaterial(std::vector<uint8_t> v_MatData, GraphicsDx11* p_Gfx, std::string matName)
     {
         std::string matText = std::string(v_MatData.begin(), v_MatData.end());
+        matText = ConvertUtils::RemoveCharFromString(matText, '\r');
 
         // Split material text into single lines
         std::vector<std::string> v_Lines = ConvertUtils::SplitStringByChar(matText, '\n');
@@ -1570,7 +1658,7 @@ namespace Mesa
             if (line.empty() || strcmp(line.c_str(), "\n") == 0) continue;
 
             // Split line into single words
-            std::vector<std::string> v_Words = ConvertUtils::SplitStringByChar(line, ' ');
+            std::vector<std::string> v_Words = ConvertUtils::SplitStringByChar(line, '=');
 
             // Skip line that have only one word since all parameters require at least two
             if (v_Words.size() <= 1) continue;
@@ -1634,12 +1722,15 @@ namespace Mesa
         material.SetDiffuseTextureId(p_Gfx->GetTextureIdByName(diffTex));
         material.SetSpecularTextureId(p_Gfx->GetTextureIdByName(specTex));
         material.SetNormalTextureId(p_Gfx->GetTextureIdByName(normTex));
+        material.m_MaterialName = matName;
 
         // Add material to Graphics class instance
         p_Gfx->m_MaterialIdSemaphore.acquire();
         material.m_MaterialId = p_Gfx->GenerateMaterialUID();
         p_Gfx->mv_Materials.push_back(material);
         p_Gfx->m_MaterialIdSemaphore.release();
+
+        LOG_F(INFO, "Material %s created with ID %u", material.GetMaterialName().c_str(), material.GetMaterialUID());
     }
 
     /*
@@ -1774,7 +1865,7 @@ namespace Mesa
     }
 
     /*
-        Generate unique model ID
+        Generates unique model ID
     */
     uint32_t GraphicsDx11::GenerateModelUID()
     {
@@ -1805,8 +1896,35 @@ namespace Mesa
         return id;
     }
 
+    /*
+        Generates unique material ID
+    */
     uint32_t GraphicsDx11::GenerateMaterialUID()
     {
-        return 0;
+        // If no materials have been loaded yet don't bother looking for free ID and simply give it 1
+        if (mv_Materials.empty()) return 1;
+
+        // Start search with ID of 1 - (0 will be reserved for fallback material)
+        uint32_t id = 1;
+        bool idFound = false;
+
+        do {
+            idFound = false;
+
+            for (auto& material : mv_Materials)
+            {
+                // Check if ID is already in use
+                if (material.m_MaterialId == id)
+                    idFound = true;
+            }
+
+            // If ID is in use increment target ID and repeat the search
+            if (idFound)
+                id++;
+
+        } while (idFound);
+
+        // Return free ID
+        return id;
     }
 }
