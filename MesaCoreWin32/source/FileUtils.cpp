@@ -1,4 +1,5 @@
 #include <Mesa/FileUtils.h>
+#include <Mesa/ConvertUtils.h>
 
 namespace Mesa
 {
@@ -217,5 +218,31 @@ namespace Mesa
 		{
 			return std::string();
 		}
+	}
+
+	/*
+		Removes file extension from path
+	*/
+	std::string FileUtils::StripExtensionFromPath(const std::string& path)
+	{
+		std::vector<std::string> v_String = ConvertUtils::SplitStringByChar(path, '.');
+
+		std::string result;
+
+		// Account for multiple dots in a path
+		for (int i = 0; i < v_String.size() - 1; i++)
+			result += v_String[i];
+
+		return result;
+	}
+
+	/*
+		Extracts file name from a path
+	*/
+	std::string FileUtils::StripPathToFileName(const std::string& path)
+	{
+		std::filesystem::path p(path);
+		std::string result = p.filename().string();
+		return result;
 	}
 }
