@@ -40,6 +40,20 @@ void Sandbox::Run()
 
 void Sandbox::ManageEvents()
 {
+	auto eb = Mesa::EventHandler::GetEventBuffer();
+
+	for (const auto& ev : eb)
+	{
+		if (ev.first == Mesa::EventType_GamepadUpdate)
+		{
+			Mesa::GamepadUpdateEvent* p_Event = (Mesa::GamepadUpdateEvent*)ev.second;
+
+			m_Camera.HandleMovement(Mesa::CameraMovementBackward, p_Event->ma_Axes[GLFW_GAMEPAD_AXIS_LEFT_Y] * 0.01f);
+			m_Camera.HandleMovement(Mesa::CameraMovementRight, p_Event->ma_Axes[GLFW_GAMEPAD_AXIS_LEFT_X] * 0.01f);
+
+		}
+	}
+
 	Mesa::EventHandler::ClearEventBuffer();
 }
 
