@@ -1287,17 +1287,21 @@ namespace Mesa
                 v_indices.push_back(face.mIndices[j]);
         }
 
-        bool vertexResult, indexResult;
+        bool vertexResult, indexResult, colorPassResult, specPassResult;
 
         // Create index and vertex buffers
         std::thread vertexThread(GraphicsDx11::CreateVertexBuffer, v_vertices, mesh.mp_VertexBuffer.GetAddressOf(), this, std::ref(vertexResult));
         std::thread indexThread(GraphicsDx11::CreateIndexBuffer, v_indices, mesh.mp_IndexBuffer.GetAddressOf(), this, std::ref(indexResult));
+        std::thread colorPassThread(GraphicsDx11::CreateEmptyBuffer, sizeof(ConstBufferDx11::MaterialBufferColorPass), D3D11_BIND_CONSTANT_BUFFER, D3D11_USAGE_DEFAULT, 0, this, mesh.mp_ColorPassBuffer.GetAddressOf(), std::ref(colorPassResult));
+        std::thread specularPassThread(GraphicsDx11::CreateEmptyBuffer, sizeof(ConstBufferDx11::MaterialBufferSpecularPass), D3D11_BIND_CONSTANT_BUFFER, D3D11_USAGE_DEFAULT, 0, this, mesh.mp_SpecularPassBuffer.GetAddressOf(), std::ref(specPassResult));
 
         vertexThread.join();
         indexThread.join();
+        colorPassThread.join();
+        specularPassThread.join();
 
         // Validate creation results
-        if (!vertexResult || !indexResult)
+        if (!vertexResult || !indexResult || !colorPassResult || !specPassResult)
         {
             LOG_F(ERROR, "Creation of one or more buffers failed!");
             return MeshDx11();
@@ -1318,7 +1322,7 @@ namespace Mesa
 
     void GraphicsDx11::RenderColorBuffer(int layer)
     {
-        float color[4] = { 0.0f, 1.0f, 0.0f, 0.0f };
+        float color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
         mp_Context->ClearRenderTargetView(mp_RenderTarget.Get(), color);
         mp_Context->ClearDepthStencilView(mp_DepthView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
@@ -1356,6 +1360,31 @@ namespace Mesa
                 
                 for (auto& mesh : model.mv_Meshes)
                 {
+                    if (mesh.m_MaterialId != 0)
+                    {
+                        for (const auto& mat : mv_Materials)
+                        {
+                            if (mat.GetMaterialUID() != mesh.m_MaterialId) continue;
+
+                            ConstBufferDx11::MaterialBufferColorPass cpBuffer = {};
+                            cpBuffer.m_BaseColor = ConvertUtils::Vec4ToXmFloat4(mat.GetBaseColor());
+                            cpBuffer.m_SubColor = ConvertUtils::Vec4ToXmFloat4(mat.GetSubColor());
+                            
+                            mp_Context->UpdateSubresource(mesh.mp_ColorPassBuffer.Get(), 0, nullptr, &cpBuffer, 0, 0);
+                            mp_Context->PSSetConstantBuffers(0, 1, mesh.mp_ColorPassBuffer.GetAddressOf());
+
+                            for (const auto& texture : mv_Textures)
+                            {
+                                if (texture.GetTextureUID() != mat.GetDiffuseTextureId()) continue;
+
+                                mp_Context->PSSetShaderResources(0, 1, texture.mp_ResourceView.GetAddressOf());
+                            }
+
+                        }
+
+                        
+                    }
+
                     UINT stride = sizeof(VertexDx11);
                     UINT offset = 0;
                     mp_Context->IASetVertexBuffers(0, 1, mesh.mp_VertexBuffer.GetAddressOf(), &stride, &offset);

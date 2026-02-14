@@ -143,4 +143,9 @@ namespace Mesa
 		std::replace(result.begin(), result.end(), original, replacement);
 		return result;
 	}
+
+	DirectX::XMFLOAT4 ConvertUtils::Vec4ToXmFloat4(const glm::vec4& data)
+	{
+		return DirectX::XMFLOAT4(data.x, data.y, data.z, data.w);
+	}
 }

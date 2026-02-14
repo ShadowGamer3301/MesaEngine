@@ -96,6 +96,8 @@ namespace Mesa
 	private:
 		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_VertexBuffer;
 		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_IndexBuffer;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_ColorPassBuffer;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_SpecularPassBuffer;
 		uint32_t m_NumIndices = 0;
 		uint32_t m_MaterialId = 0;
 		std::string m_MaterialName = std::string();
@@ -115,7 +117,7 @@ namespace Mesa
 		friend class GraphicsDx11;
 	public: // Setters
 		inline void SetBaseColor(const glm::vec4& color) noexcept { m_BaseColor = color; }
-		inline void SetSubColor(const glm::vec4& color) noexcept { m_BaseColor = color; }
+		inline void SetSubColor(const glm::vec4& color) noexcept { m_SubColor = color; }
 		inline void SetSpecularPower(const float& power) noexcept { m_SpecularPower = power; }
 		inline void SetSpecularTextureId(const uint32_t& id) noexcept { m_SpecularTextureId = id; }
 		inline void SetNormalTextureId(const uint32_t& id) noexcept { m_NormalTextureId = id; }
