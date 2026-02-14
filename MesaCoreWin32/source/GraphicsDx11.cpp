@@ -1352,6 +1352,82 @@ namespace Mesa
     }
 
     /*
+        Loads material definitions from specific file
+    */
+    std::map<std::string, std::string> GraphicsDx11::LoadMaterialDefinitions(const std::string& matDefName)
+    {
+        std::map<std::string, std::string> result;
+
+        // Use lookup table to find in which pack the model is contained in
+        // and what index it has
+        auto packName = LookUpUtils::FindFilePack(matDefName);
+        auto packIndex = LookUpUtils::FindFileIndex(matDefName);
+
+        // Validate lookup results
+        if (packName.empty() || !packIndex.has_value())
+        {
+            LOG_F(ERROR, "Could not find %s in lookup table!", matDefName.c_str());
+            return result;
+        }
+
+        // Read pack contents
+        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Model"), packName);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+
+        // Calculate where file details are
+        uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * packIndex.value();
+
+        // Validate calculation results
+        if (headerPos >= v_PackData.size())
+        {
+            LOG_F(ERROR, "Invalid header position of %s", matDefName.c_str());
+            return result;
+        }
+
+        // Calculate where file data starts
+        uint64_t startPos = 0;
+        memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+        // Validate calculation results
+        if (startPos <= headerPos)
+        {
+            LOG_F(ERROR, "Invalid starting position of %s", matDefName.c_str());
+            return result;
+        }
+
+        // Grab file size
+        uint32_t fileSize = 0;
+        memcpy(&fileSize, &v_PackData[headerPos + sizeof(uint64_t)], sizeof(uint32_t));
+
+        // Validate file size
+        if (fileSize <= 0)
+        {
+            LOG_F(ERROR, "Invalid size of %s", matDefName.c_str());
+            return result;
+        }
+
+        // Load matdef data
+        std::vector<uint8_t> v_MatDefData(fileSize);
+        memcpy(&v_MatDefData[0], &v_PackData[startPos - 1], fileSize);
+
+        std::string matDefText = std::string(v_MatDefData.begin(), v_MatDefData.end());
+
+        matDefText = ConvertUtils::RemoveCharFromString(matDefText, '\r');
+        std::vector<std::string> v_Lines = ConvertUtils::SplitStringByChar(matDefText, '\n');
+
+        for (const auto& line : v_Lines)
+        {
+            std::vector<std::string> v_Params = ConvertUtils::SplitStringByChar(line, '=');
+
+            if (v_Params.size() < 2) continue;
+
+            result[v_Params[0]] = v_Params[1];
+        }
+
+        return result;
+    }
+
+    /*
         Compiles singular shader
     */
     void GraphicsDx11::CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx, std::string vertexName, std::string pixelName)
@@ -1506,7 +1582,10 @@ namespace Mesa
     {
         // Check if the texture is already loaded
         if (p_Gfx->GetTextureIdByName(textureName) != 0)
+        {
+            LOG_F(INFO, "%s already loaded with ID = %u", p_Gfx->GetTextureIdByName(textureName));
             return;
+        }
 
         LOG_F(INFO, "Loading %s", textureName.c_str());
 

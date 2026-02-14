@@ -92,6 +92,9 @@ namespace Mesa
 	private: // Rendering functions
 		void RenderColorBuffer(int layer);
 
+	private: // Synchronus asset loading functions
+		std::map<std::string, std::string> LoadMaterialDefinitions(const std::string& matDefName);
+
 	private: // Asynchronus asset loading functions
 		static void CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx, std::string vertexName, std::string pixelName);
 		static void CompileVertexShader(std::vector<uint8_t> v_VertexData, ShaderType type, ID3D11VertexShader** pp_Shader, ID3D11InputLayout** pp_Layout, GraphicsDx11* p_Gfx);
