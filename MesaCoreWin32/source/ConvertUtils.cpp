@@ -136,4 +136,11 @@ namespace Mesa
 		str.erase(std::remove(str.begin(), str.end(), c), str.end());
 		return str;
 	}
+
+	std::string ConvertUtils::ReplaceCharInString(const std::string& s, char original, char replacement)
+	{
+		std::string result = s;
+		std::replace(result.begin(), result.end(), original, replacement);
+		return result;
+	}
 }

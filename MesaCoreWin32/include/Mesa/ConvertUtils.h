@@ -15,5 +15,6 @@ namespace Mesa
 		static DirectX::XMMATRIX Mat4x4ToXmMatrix(const glm::mat4x4& m);
 		static DirectX::XMFLOAT3 Vec3ToXmFloat3(const glm::vec3& data);
 		static std::string RemoveCharFromString(const std::string& s, char c);
+		static std::string ReplaceCharInString(const std::string& s, char original, char replacement);
 	};
 }

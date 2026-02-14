@@ -796,7 +796,7 @@ namespace Mesa
         }
 
         // Read pack contents
-        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Texture"), packName);
+        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Material"), packName);
         std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
 
         if (v_PackData.empty())
@@ -1709,7 +1709,8 @@ namespace Mesa
 
         for (auto& mesh : model.mv_Meshes)
         {
-            mesh.m_MaterialName = matDef[mesh.m_MeshMatName];
+            mesh.m_MaterialName = ConvertUtils::ReplaceCharInString(matDef[mesh.m_MeshMatName], '\\', '/');
+            mesh.m_MaterialId = p_Gfx->LoadMaterialFromPack(mesh.m_MaterialName);
         }
 
         // Fill out the rest of the model details
