@@ -26,6 +26,7 @@ namespace Mesa
 		virtual uint32_t LoadModelFromPack(const std::string& originalName) = 0;
 		virtual uint32_t CompileForwardShaderFromPack(const std::string& vertexName) = 0;
 		virtual uint32_t LoadTextureFromPack(const std::string& originalName) = 0;
+		virtual uint32_t LoadMaterialFromPack(const std::string& originalName) = 0;
 	};
 
 	class MSAPI GraphicsDx11Exception : public Exception
@@ -61,6 +62,7 @@ namespace Mesa
 		uint32_t LoadModelFromPack(const std::string& originalName) override;
 		uint32_t CompileForwardShaderFromPack(const std::string& vertexName) override;
 		uint32_t LoadTextureFromPack(const std::string& originalName) override;
+		uint32_t LoadMaterialFromPack(const std::string& originalName) override;
 
 	public: // Getters
 		uint32_t GetShaderIdByVertexName(const std::string& name);

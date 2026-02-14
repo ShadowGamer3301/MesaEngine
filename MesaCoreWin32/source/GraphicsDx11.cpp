@@ -771,6 +771,74 @@ namespace Mesa
     }
 
     /*
+        Loads single material from pack
+    */
+    uint32_t GraphicsDx11::LoadMaterialFromPack(const std::string& originalName)
+    {
+        // Use lookup table to find in which pack the texture is contained in
+       // and what index it has
+        auto packName = LookUpUtils::FindFilePack(originalName);
+        auto packIndex = LookUpUtils::FindFileIndex(originalName);
+
+        // Validate lookup results
+        if (packName.empty() || !packIndex.has_value())
+        {
+            LOG_F(ERROR, "Could not find %s in lookup table!", originalName.c_str());
+            return 0;
+        }
+
+        // Read pack contents
+        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Texture"), packName);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+
+        if (v_PackData.empty())
+        {
+            LOG_F(ERROR, "Could not read %s", packPath.c_str());
+            return 0;
+        }
+
+        // Calculate where file details are
+        uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * packIndex.value();
+
+        // Validate calculation results
+        if (headerPos >= v_PackData.size())
+        {
+            LOG_F(ERROR, "Invalid header position of %s", originalName.c_str());
+            return 0;
+        }
+
+        // Calculate where file data starts
+        uint64_t startPos = 0;
+        memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+        // Validate calculation results
+        if (startPos <= headerPos)
+        {
+            LOG_F(ERROR, "Invalid starting position of %s", originalName.c_str());
+            return 0;
+        }
+
+        // Grab file size
+        uint32_t fileSize = 0;
+        memcpy(&fileSize, &v_PackData[headerPos + sizeof(uint64_t)], sizeof(uint32_t));
+
+        // Validate file size
+        if (fileSize <= 0)
+        {
+            LOG_F(ERROR, "Invalid size of %s", originalName.c_str());
+            return 0;
+        }
+
+        // Load texture data
+        std::vector<uint8_t> v_MatData(fileSize);
+        memcpy(&v_MatData[0], &v_PackData[startPos - 1], fileSize);
+
+        CreateMaterial(v_MatData, this, originalName);
+
+        return GetMaterialIdByName(originalName);
+    }
+
+    /*
         Returns shader ID if the its vertex name matches with provided string
     */
     uint32_t GraphicsDx11::GetShaderIdByVertexName(const std::string& name)

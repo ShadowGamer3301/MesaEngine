@@ -97,6 +97,8 @@ namespace Mesa
 		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_VertexBuffer;
 		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_IndexBuffer;
 		uint32_t m_NumIndices = 0;
+		uint32_t m_MaterialId = 0;
+		std::string m_MaterialName = std::string();
 	};
 
 	class MSAPI ModelDx11 : public Model
