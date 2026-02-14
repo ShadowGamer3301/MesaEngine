@@ -8,6 +8,12 @@ Sandbox::Sandbox()
 
 	m_Object.SetColorShader(shaderId);
 
+	shaderId = mp_Graphics->CompileForwardShaderFromPack("Asset_INT/Shader/V_SpecularPass.hlsl");
+	if (shaderId == 0)
+		throw Mesa::Exception();
+
+	m_Object.SetSpecularShader(shaderId);
+
 	uint32_t modelId = mp_Graphics->LoadModelFromPack("Asset_INT/Model/Jill_Stage_5.fbx");
 	if (modelId == 0)
 		throw Mesa::Exception();

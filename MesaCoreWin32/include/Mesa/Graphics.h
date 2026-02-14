@@ -91,6 +91,7 @@ namespace Mesa
 
 	private: // Rendering functions
 		void RenderColorBuffer(int layer);
+		void RenderSpecularBuffer(int layer);
 
 	private: // Synchronus asset loading functions
 		std::map<std::string, std::string> LoadMaterialDefinitions(const std::string& matDefName);
@@ -107,6 +108,7 @@ namespace Mesa
 		static void CreateEmptyBuffer(size_t size, UINT bindFlag, D3D11_USAGE usage, UINT cpuAccess, GraphicsDx11* p_Gfx, ID3D11Buffer** pp_Buffer, bool& result);
 		static void CreateMaterial(std::vector<uint8_t> v_MatData, GraphicsDx11* p_Gfx, std::string matName);
 		static void LoadTextureFromPackAsync(std::string originalName, GraphicsDx11* p_Gfx);
+		static void CreateCriticalTexture(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D11_BIND_FLAG bindFlag, GraphicsDx11* p_Gfx, ID3D11Texture2D** pp_Texture, ID3D11ShaderResourceView** pp_View);
 
 	private: // ID generating functions
 		uint32_t GenerateShaderUID();
@@ -138,8 +140,13 @@ namespace Mesa
 	private: // Layer rendering interfaces
 		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_LayerColorBuffer;
 		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_PrevLayerColorBuffer;
-		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_LayerResourceView;
-		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_PrevLayerResourceView;
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_ColorResourceView;
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_PrevColorResourceView;
+
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_LayerSpecBuffer;
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_PrevLayerSpecBuffer;
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_SpecResourceView;
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_PrevSpecResourceView;
 
 	private: // Buffers for loaded assets
 		std::vector<ShaderDx11> mv_Shaders;

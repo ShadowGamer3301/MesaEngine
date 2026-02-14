@@ -78,6 +78,17 @@ namespace Mesa
         // Configure blend state
         InitializeBlendState();
         LOG_F(INFO, "Blend state initialized");
+
+        // Create renderpass buffers
+        std::thread colorPassBuf(GraphicsDx11::CreateCriticalTexture, p_Window->GetWindowWidth(), p_Window->GetWindowHeight(), DXGI_FORMAT_R8G8B8A8_UNORM, D3D11_BIND_SHADER_RESOURCE, this, mp_LayerColorBuffer.GetAddressOf(), mp_ColorResourceView.GetAddressOf());
+        std::thread prevColorPassBuf(GraphicsDx11::CreateCriticalTexture, p_Window->GetWindowWidth(), p_Window->GetWindowHeight(), DXGI_FORMAT_R8G8B8A8_UNORM, D3D11_BIND_SHADER_RESOURCE, this, mp_PrevLayerColorBuffer.GetAddressOf(), mp_PrevColorResourceView.GetAddressOf());
+        std::thread specPassBuf(GraphicsDx11::CreateCriticalTexture, p_Window->GetWindowWidth(), p_Window->GetWindowHeight(), DXGI_FORMAT_R8G8B8A8_UNORM, D3D11_BIND_SHADER_RESOURCE, this, mp_LayerSpecBuffer.GetAddressOf(), mp_SpecResourceView.GetAddressOf());
+        std::thread prevSpecPassBuf(GraphicsDx11::CreateCriticalTexture, p_Window->GetWindowWidth(), p_Window->GetWindowHeight(), DXGI_FORMAT_R8G8B8A8_UNORM, D3D11_BIND_SHADER_RESOURCE, this, mp_PrevLayerSpecBuffer.GetAddressOf(), mp_PrevSpecResourceView.GetAddressOf());
+    
+        colorPassBuf.join();
+        prevColorPassBuf.join();
+        specPassBuf.join();
+        prevSpecPassBuf.join();
     }
 
     /*
@@ -136,6 +147,9 @@ namespace Mesa
         for (int i = 0; i < m_NumLayers; i++)
         {
             RenderColorBuffer(i);
+            mp_Context->CopyResource(mp_LayerColorBuffer.Get(), mp_BackBuffer.Get());
+            RenderSpecularBuffer(i);
+            mp_Context->CopyResource(mp_LayerSpecBuffer.Get(), mp_BackBuffer.Get());
         }
 
         mp_SwapChain->Present(0, 0);
@@ -1395,6 +1409,81 @@ namespace Mesa
         }
     }
 
+    void GraphicsDx11::RenderSpecularBuffer(int layer)
+    {
+        float color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+        mp_Context->ClearRenderTargetView(mp_RenderTarget.Get(), color);
+        mp_Context->ClearDepthStencilView(mp_DepthView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+
+        for (auto& object : mv_Objects)
+        {
+            if (object->GetLayer() != layer) continue;
+
+            for (auto& shader : mv_Shaders)
+            {
+                if (shader.GetShaderUID() != object->GetSpecularShader()) continue;
+
+                mp_Context->VSSetShader(shader.mp_VertexShader.Get(), nullptr, 0);
+                mp_Context->PSSetShader(shader.mp_PixelShader.Get(), nullptr, 0);
+                mp_Context->IASetInputLayout(shader.mp_InputLayout.Get());
+            }
+
+            ConstBufferDx11::MvpBuffer mvp = {};
+
+            if (mp_Camera != nullptr)
+            {
+                float fov = 60.0f / 360.0f * DirectX::XM_PIDIV2;
+                mvp.m_Proj = DirectX::XMMatrixPerspectiveFovLH(fov, 1280.0f / 720.0f, 0.01f, 1000.0f);
+                mvp.m_Proj = mp_Camera->GetProjectionMatrix();
+                mvp.m_View = mp_Camera->GetViewMatrix();
+            }
+
+            for (auto& model : mv_Models)
+            {
+                if (model.GetModelUID() != object->GetModel()) continue;
+
+                mvp.m_Model = ConvertUtils::Mat4x4ToXmMatrix(object->GetWorldMatrix());
+                mp_Context->UpdateSubresource(model.mp_ConstBufferMVP.Get(), 0, nullptr, &mvp, 0, 0);
+                mp_Context->VSSetConstantBuffers(0, 1, model.mp_ConstBufferMVP.GetAddressOf());
+                mp_Context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+                for (auto& mesh : model.mv_Meshes)
+                {
+                    if (mesh.m_MaterialId != 0)
+                    {
+                        for (const auto& mat : mv_Materials)
+                        {
+                            if (mat.GetMaterialUID() != mesh.m_MaterialId) continue;
+
+                            ConstBufferDx11::MaterialBufferSpecularPass spBuffer = {};
+
+                            spBuffer.m_SpecularPower = mat.GetSpecularPower();
+
+                            mp_Context->UpdateSubresource(mesh.mp_SpecularPassBuffer.Get(), 0, nullptr, &spBuffer, 0, 0);
+                            mp_Context->PSSetConstantBuffers(0, 1, mesh.mp_SpecularPassBuffer.GetAddressOf());
+
+                            for (const auto& texture : mv_Textures)
+                            {
+                                if (texture.GetTextureUID() != mat.GetSpecularTextureId()) continue;
+
+                                mp_Context->PSSetShaderResources(0, 1, texture.mp_ResourceView.GetAddressOf());
+                            }
+
+                        }
+
+
+                    }
+
+                    UINT stride = sizeof(VertexDx11);
+                    UINT offset = 0;
+                    mp_Context->IASetVertexBuffers(0, 1, mesh.mp_VertexBuffer.GetAddressOf(), &stride, &offset);
+                    mp_Context->IASetIndexBuffer(mesh.mp_IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+                    mp_Context->DrawIndexed(mesh.m_NumIndices, 0, 0);
+                }
+            }
+        }
+    }
+
     /*
         Loads material definitions from specific file
     */
@@ -1890,7 +1979,7 @@ namespace Mesa
             else if (strcmp(v_Words[0].c_str(), "$normalTex") == 0)
             {
                 normThread = std::thread(LoadTextureFromPackAsync, v_Words[1], p_Gfx);
-                specTex = v_Words[1];
+                normTex = v_Words[1];
             }
         }
 
@@ -1999,6 +2088,31 @@ namespace Mesa
         memcpy(&v_TextureData[0], &v_PackData[startPos - 1], fileSize);
 
         LoadTexture(v_TextureData, p_Gfx, originalName);
+    }
+
+    void GraphicsDx11::CreateCriticalTexture(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D11_BIND_FLAG bindFlag, GraphicsDx11* p_Gfx, ID3D11Texture2D** pp_Texture, ID3D11ShaderResourceView** pp_View)
+    {
+        // Fill out DirectX structures for texture
+        D3D11_TEXTURE2D_DESC desc = {};
+        desc.Format = format;
+        desc.CPUAccessFlags = 0;
+        desc.Width = width;
+        desc.Height = height;
+        desc.BindFlags = bindFlag;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+
+        THROW_IF_FAILED_DX(p_Gfx->mp_Device->CreateTexture2D(&desc, nullptr, pp_Texture));
+
+        // Fill out DirectX structures for resource view
+        D3D11_SHADER_RESOURCE_VIEW_DESC srv = {};
+        srv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        srv.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        srv.Texture2D.MipLevels = 1;
+
+        THROW_IF_FAILED_DX(p_Gfx->mp_Device->CreateShaderResourceView(*pp_Texture, &srv, pp_View));
     }
 
     /*
