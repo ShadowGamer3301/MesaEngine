@@ -775,8 +775,16 @@ namespace Mesa
     */
     uint32_t GraphicsDx11::LoadMaterialFromPack(const std::string& originalName)
     {
+        uint32_t existsCheck = GetMaterialIdByName(originalName);
+
+        if (existsCheck != 0)
+        {
+            LOG_F(INFO, "%s already loaded with ID = %u", originalName.c_str(), existsCheck);
+            return existsCheck;
+        }
+
         // Use lookup table to find in which pack the texture is contained in
-       // and what index it has
+        // and what index it has
         auto packName = LookUpUtils::FindFilePack(originalName);
         auto packIndex = LookUpUtils::FindFileIndex(originalName);
 
