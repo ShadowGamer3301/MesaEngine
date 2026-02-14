@@ -2,11 +2,15 @@
 
 Sandbox::Sandbox()
 {
+	mp_Graphics->SetBlendingShader(mp_Graphics->CompileForwardShaderFromPack("Asset_INT/Shader/V_BlendingShader.hlsl"));
+
 	uint32_t shaderId = mp_Graphics->CompileForwardShaderFromPack("Asset_INT/Shader/V_ColorPass.hlsl");
 	if (shaderId == 0)
 		throw Mesa::Exception();
 
 	m_Object.SetColorShader(shaderId);
+
+	mp_Graphics->SetNumberOfLayers(2);
 
 	shaderId = mp_Graphics->CompileForwardShaderFromPack("Asset_INT/Shader/V_SpecularPass.hlsl");
 	if (shaderId == 0)

@@ -89,6 +89,8 @@ namespace Mesa
         prevColorPassBuf.join();
         specPassBuf.join();
         prevSpecPassBuf.join();
+
+        InitializeBlendingMesh();
     }
 
     /*
@@ -150,6 +152,15 @@ namespace Mesa
             mp_Context->CopyResource(mp_LayerColorBuffer.Get(), mp_BackBuffer.Get());
             RenderSpecularBuffer(i);
             mp_Context->CopyResource(mp_LayerSpecBuffer.Get(), mp_BackBuffer.Get());
+            if (i == 0)
+            {
+                mp_Context->CopyResource(mp_PrevLayerColorBuffer.Get(), mp_LayerColorBuffer.Get());
+                mp_Context->CopyResource(mp_PrevLayerSpecBuffer.Get(), mp_LayerSpecBuffer.Get());
+            }
+            else
+            {
+                BlendLayers();
+            }
         }
 
         mp_SwapChain->Present(0, 0);
@@ -175,6 +186,21 @@ namespace Mesa
             mv_Objects.push_back(p_GameObject);
         else
             LOG_F(WARNING, "Nullptr was passed to InsertGameObject function");
+    }
+
+    void GraphicsDx11::SetBlendingShader(uint32_t shaderId)
+    {
+        for (const auto& shader : mv_Shaders)
+        {
+            if (shader.GetShaderUID() == shaderId)
+            {
+                LOG_F(INFO, "Blending shader set to %s", shader.GetVertexShaderName().c_str());
+                m_BlendingShaderId = shaderId;
+                return;
+            }
+        }
+
+        LOG_F(WARNING, "Couldn't find shader with ID = %u! Blending shader unchanged!", shaderId);
     }
 
     /*
@@ -1224,6 +1250,7 @@ namespace Mesa
         desc.RenderTarget[0] = rtbd;
 
         THROW_IF_FAILED_DX(mp_Device->CreateBlendState(&desc, mp_BlendState.GetAddressOf()));
+
     }
 
     /*
@@ -1332,6 +1359,20 @@ namespace Mesa
         mesh.m_NumIndices = v_indices.size();
 
         return mesh;
+    }
+
+    void GraphicsDx11::InitializeBlendingMesh()
+    {
+        std::vector<DeferredVertexDx11> v = {
+             { DirectX::XMFLOAT3(-1.0f, -1.0f, 0.0f), DirectX::XMFLOAT2(0, 1) },
+             { DirectX::XMFLOAT3(1.0f, 1.0f, 0.0f), DirectX::XMFLOAT2(1, 0) },
+             { DirectX::XMFLOAT3(1.0f, -1.0f, 0.0f), DirectX::XMFLOAT2(1, 1) },
+             { DirectX::XMFLOAT3(-1.0f, 1.0f, 0.0f), DirectX::XMFLOAT2(0, 0) },
+             { DirectX::XMFLOAT3(1.0f, 1.0f, 0.0f), DirectX::XMFLOAT2(1, 0) },
+             { DirectX::XMFLOAT3(-1.0f, -1.0f, 0.0f), DirectX::XMFLOAT2(0, 1) },
+        };
+
+        GraphicsDx11::CreateDeferredVertexBufferCritical(v, mp_BlendingPlaneBuffer.GetAddressOf(), this);
     }
 
     void GraphicsDx11::RenderColorBuffer(int layer)
@@ -1482,6 +1523,34 @@ namespace Mesa
                 }
             }
         }
+    }
+
+    void GraphicsDx11::BlendLayers()
+    {
+        if (m_BlendingShaderId == 0) return;
+
+        float color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+        mp_Context->ClearRenderTargetView(mp_RenderTarget.Get(), color);
+        mp_Context->ClearDepthStencilView(mp_DepthView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+
+        for (const auto& shader : mv_Shaders)
+        {
+            if (m_BlendingShaderId != shader.GetShaderUID()) continue;
+
+            mp_Context->VSSetShader(shader.mp_VertexShader.Get(), nullptr, 0);
+            mp_Context->PSSetShader(shader.mp_PixelShader.Get(), nullptr, 0);
+            mp_Context->IASetInputLayout(shader.mp_InputLayout.Get());
+        }
+
+        mp_Context->PSSetShaderResources(0, 1, mp_ColorResourceView.GetAddressOf());
+        mp_Context->PSSetShaderResources(1, 1, mp_PrevColorResourceView.GetAddressOf());
+
+        UINT stride = sizeof(DeferredVertexDx11);
+        UINT offset = 0;
+        mp_Context->IASetVertexBuffers(0, 1, mp_BlendingPlaneBuffer.GetAddressOf(), &stride, &offset);
+        mp_Context->Draw(6, 0);
+
+
     }
 
     /*
@@ -1878,6 +1947,66 @@ namespace Mesa
             result = true;
 
         return;
+    }
+
+    /*
+        Creates DirectX buffer with deferred vertex data.
+        Function returns ture if creation was sucessful or false otherwise
+        via reference bool.
+    */
+    void GraphicsDx11::CreateDeferredVertexBuffer(std::vector<DeferredVertexDx11> v_verts, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result)
+    {
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = sizeof(DeferredVertexDx11) * v_verts.size();
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        desc.CPUAccessFlags = 0;
+
+        D3D11_SUBRESOURCE_DATA data = {};
+        data.pSysMem = v_verts.data();
+
+        if (FAILED(p_Gfx->mp_Device->CreateBuffer(&desc, &data, pp_Buffer)))
+            result = false;
+        else
+            result = true;
+
+        return;
+    }
+
+    /*
+        Creates DirectX buffer with vertex data.
+        Function throw exception if creation fails.
+    */
+    void GraphicsDx11::CreateVertexBufferCritical(std::vector<VertexDx11> v_verts, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx)
+    {
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = sizeof(VertexDx11) * v_verts.size();
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        desc.CPUAccessFlags = 0;
+
+        D3D11_SUBRESOURCE_DATA data = {};
+        data.pSysMem = v_verts.data();
+
+        THROW_IF_FAILED_DX(p_Gfx->mp_Device->CreateBuffer(&desc, &data, pp_Buffer));
+    }
+
+    /*
+        Creates DirectX buffer with deferred vertex data.
+        Function throw exception if creation fails.
+    */
+    void GraphicsDx11::CreateDeferredVertexBufferCritical(std::vector<DeferredVertexDx11> v_verts, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx)
+    {
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = sizeof(DeferredVertexDx11) * v_verts.size();
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        desc.CPUAccessFlags = 0;
+
+        D3D11_SUBRESOURCE_DATA data = {};
+        data.pSysMem = v_verts.data();
+
+        THROW_IF_FAILED_DX(p_Gfx->mp_Device->CreateBuffer(&desc, &data, pp_Buffer));
     }
 
     /*

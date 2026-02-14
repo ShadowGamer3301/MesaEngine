@@ -6,12 +6,6 @@ namespace Mesa
 	/*
 		Vertex structure used for forward rendering
 	*/
-	struct ForwardVertexDx11
-	{
-		DirectX::XMFLOAT3 m_Position;
-		DirectX::XMFLOAT2 m_TexCoord;
-		DirectX::XMFLOAT3 m_Normal;
-	};
 
 	/*
 		Vertex structure used for deferred rendering
