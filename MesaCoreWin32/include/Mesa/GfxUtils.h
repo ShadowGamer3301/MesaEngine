@@ -99,6 +99,7 @@ namespace Mesa
 		uint32_t m_NumIndices = 0;
 		uint32_t m_MaterialId = 0;
 		std::string m_MaterialName = std::string();
+		std::string m_MeshMatName = std::string();
 	};
 
 	class MSAPI ModelDx11 : public Model

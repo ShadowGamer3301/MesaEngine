@@ -106,4 +106,20 @@ namespace Mesa
 		return std::string();
 	}
 
+	LookUpEntry LookUpUtils::FindByFileNameOnly(const std::string& fileName)
+	{
+		std::vector<LookUpEntry> v_entries = LoadLookupTable();
+
+		std::vector<std::string> v_result;
+
+		for (const auto& entry : v_entries)
+		{
+			std::string filenameOnly = FileUtils::StripPathToFileName(entry.m_OriginalName);
+			if (strcmp(fileName.c_str(), filenameOnly.c_str()) == 0)
+				return entry;
+		}
+
+		return LookUpEntry();
+	}
+
 }

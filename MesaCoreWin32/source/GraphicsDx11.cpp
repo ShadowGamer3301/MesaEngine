@@ -1295,6 +1295,13 @@ namespace Mesa
             return MeshDx11();
         }
 
+        if (p_Mesh->mMaterialIndex >= 0)
+        {
+            aiMaterial* material = p_Scene->mMaterials[p_Mesh->mMaterialIndex];
+
+            mesh.m_MeshMatName = material->GetName().C_Str();
+        }
+
         // Save number of indices
         mesh.m_NumIndices = v_indices.size();
 
@@ -1360,22 +1367,21 @@ namespace Mesa
 
         // Use lookup table to find in which pack the model is contained in
         // and what index it has
-        auto packName = LookUpUtils::FindFilePack(matDefName);
-        auto packIndex = LookUpUtils::FindFileIndex(matDefName);
+        auto entryData = LookUpUtils::FindByFileNameOnly(matDefName);
 
         // Validate lookup results
-        if (packName.empty() || !packIndex.has_value())
+        if (entryData.m_PackName.empty())
         {
             LOG_F(ERROR, "Could not find %s in lookup table!", matDefName.c_str());
             return result;
         }
 
         // Read pack contents
-        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Model"), packName);
+        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Model"), entryData.m_PackName);
         std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
 
         // Calculate where file details are
-        uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * packIndex.value();
+        uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * entryData.m_Index;
 
         // Validate calculation results
         if (headerPos >= v_PackData.size())
@@ -1659,6 +1665,11 @@ namespace Mesa
     {
         LOG_F(INFO, "Loading %s", modelName.c_str());
 
+        std::string matDefName = FileUtils::StripPathToFileName(modelName);
+        matDefName += ".matdef";
+
+        auto matDef = p_Gfx->LoadMaterialDefinitions(matDefName);
+
         Assimp::Importer importer;
 
         // Read raw bytes and treat them as a contents of FBX file
@@ -1686,6 +1697,11 @@ namespace Mesa
         {
             LOG_F(ERROR, "Cration of constant buffer failed!");
             return;
+        }
+
+        for (auto& mesh : model.mv_Meshes)
+        {
+            mesh.m_MaterialName = matDef[mesh.m_MeshMatName];
         }
 
         // Fill out the rest of the model details
