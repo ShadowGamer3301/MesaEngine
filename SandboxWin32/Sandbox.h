@@ -8,6 +8,7 @@ public:
 	~Sandbox();
 
 	void Run() override;
+	void ManageEvents();
 
 private:
 	Mesa::CameraDx11 m_Camera;

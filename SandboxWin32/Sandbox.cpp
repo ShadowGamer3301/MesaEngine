@@ -2,23 +2,26 @@
 
 Sandbox::Sandbox()
 {
-	auto shaderpack = mp_Graphics->CompileForwardShaderPack("Forward_Shaders.msdp");
-	mp_Graphics->LoadTexturePack("testTextures.mtp");
-	auto mdlpack = mp_Graphics->LoadModelPack("testModel.mmdp");
+	uint32_t shaderId = mp_Graphics->CompileForwardShaderFromPack("Asset_INT/Shader/V_ColorPass.hlsl");
+	if (shaderId == 0)
+		throw Mesa::Exception();
+
+	m_Object.SetColorShader(shaderId);
+
+	uint32_t modelId = mp_Graphics->LoadModelFromPack("Asset_INT/Model/Jill_Stage_5.fbx");
+	if (modelId == 0)
+		throw Mesa::Exception();
+
+	m_Object.SetModel(modelId);
+	m_Object.SetRotation(glm::vec3(0, 180, 0));
+
+	mp_Graphics->InsertGameObject(&m_Object);
+
+	uint32_t textureId = mp_Graphics->LoadTextureFromPack("Asset_INT/Texture/Chara000_DM_HQ.png");
+	if (textureId == 0)
+		throw Mesa::Exception();
 
 	m_Camera.SetProjectionValues(60, mp_Window->GetWindowWidth()/(float)mp_Window->GetWindowHeight(), 0.01f, 1000.0f);
-
-	for (auto& model : mdlpack)
-	{
-		m_Object.SetModel(model.second);
-	}
-
-	for (auto& shader : shaderpack)
-	{
-		m_Object.SetColorShader(shader.second);
-	}
-	m_Object.SetRotation(glm::vec3(0, 180, 0));
-	mp_Graphics->InsertGameObject(&m_Object);
 	mp_Graphics->SetCamera(&m_Camera);
 }
 
@@ -30,8 +33,14 @@ void Sandbox::Run()
 {
 	while (mp_Window->Update())
 	{
+		ManageEvents();
 		mp_Graphics->DrawFrame(mp_Window);
 	}
+}
+
+void Sandbox::ManageEvents()
+{
+	Mesa::EventHandler::ClearEventBuffer();
 }
 
 Mesa::Application* Mesa::NewApplication()

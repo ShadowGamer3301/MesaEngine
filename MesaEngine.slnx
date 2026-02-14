@@ -4,6 +4,7 @@
     <Platform Name="x86" />
   </Configurations>
   <Project Path="AssetPackerWin32/AssetPackerWin32.vcxproj" Id="bc77e232-a70b-4298-a794-866f332a011f" />
+  <Project Path="MaterialEditWin32/MaterialEditWin32.vcxproj" Id="7d2422ca-b049-410d-98fb-cc4cbf750370" />
   <Project Path="MesaCoreWin32/MesaCoreWin32.vcxproj" Id="4b50117b-6eb3-4cbf-b72d-769901d389c6" />
   <Project Path="SandboxWin32/SandboxWin32.vcxproj" Id="86bc14cc-72b6-43ee-828a-395921add126" />
 </Solution>

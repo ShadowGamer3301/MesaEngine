@@ -96,7 +96,12 @@ namespace Mesa
 	private:
 		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_VertexBuffer;
 		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_IndexBuffer;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_ColorPassBuffer;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_SpecularPassBuffer;
 		uint32_t m_NumIndices = 0;
+		uint32_t m_MaterialId = 0;
+		std::string m_MaterialName = std::string();
+		std::string m_MeshMatName = std::string();
 	};
 
 	class MSAPI ModelDx11 : public Model
@@ -105,5 +110,37 @@ namespace Mesa
 	private:
 		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_ConstBufferMVP;
 		std::vector<MeshDx11> mv_Meshes;
+	};
+
+	class MSAPI Material
+	{
+		friend class GraphicsDx11;
+	public: // Setters
+		inline void SetBaseColor(const glm::vec4& color) noexcept { m_BaseColor = color; }
+		inline void SetSubColor(const glm::vec4& color) noexcept { m_SubColor = color; }
+		inline void SetSpecularPower(const float& power) noexcept { m_SpecularPower = power; }
+		inline void SetSpecularTextureId(const uint32_t& id) noexcept { m_SpecularTextureId = id; }
+		inline void SetNormalTextureId(const uint32_t& id) noexcept { m_NormalTextureId = id; }
+		inline void SetDiffuseTextureId(const uint32_t& id) noexcept { m_DiffuseTextureId = id; }
+
+	public: // Getters
+		inline glm::vec4 GetBaseColor() const noexcept { return m_BaseColor; }
+		inline glm::vec4 GetSubColor() const noexcept { return m_SubColor; }
+		inline float GetSpecularPower() const noexcept { return m_SpecularPower; }
+		inline uint32_t GetSpecularTextureId() const noexcept { return m_SpecularTextureId; }
+		inline uint32_t GetNormalTextureId() const noexcept { return m_NormalTextureId; }
+		inline uint32_t GetDiffuseTextureId() const noexcept { return m_DiffuseTextureId; }
+		inline uint32_t GetMaterialUID() const noexcept { return m_MaterialId; }
+		inline std::string GetMaterialName() const noexcept { return m_MaterialName; }
+
+	private:
+		float m_SpecularPower = 1.0f;
+		glm::vec4 m_BaseColor = glm::vec4(1.0f);
+		glm::vec4 m_SubColor = glm::vec4(0.0f);
+		uint32_t m_NormalTextureId = 0;
+		uint32_t m_DiffuseTextureId = 0;
+		uint32_t m_SpecularTextureId = 0;
+		uint32_t m_MaterialId = 0;
+		std::string m_MaterialName = std::string();
 	};
 }

@@ -17,5 +17,10 @@ namespace Mesa
 	public:
 		static std::vector<LookUpEntry> LoadLookupTable();
 		static std::vector<LookUpEntry> LoadSpecificPackInfo(const std::string& packName);
+		static std::string FindFilePack(const std::string& fileName);
+		static std::optional<uint32_t> FindFileIndex(const std::string& fileName);
+		static std::vector<std::string> GetFileNamesFromPack(const std::string& packName);
+		static std::string GetFileNameFromPack(const std::string& packName, const uint32_t index);
+		static LookUpEntry FindByFileNameOnly(const std::string& fileName);
 	};
 }

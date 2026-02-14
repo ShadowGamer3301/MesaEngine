@@ -19,9 +19,14 @@ namespace Mesa
 		virtual std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath) = 0;
 		virtual std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath) = 0;
 		virtual std::map<std::string, uint32_t> LoadModelPack(const std::string& packPath) = 0;
+		virtual std::map<std::string, uint32_t> LoadMaterialPack(const std::string& packPath) = 0;
 		virtual void SetNumberOfLayers(const uint32_t& layers) = 0;
 		virtual void SetCamera(Camera* p_Camera) = 0;
 		virtual void InsertGameObject(GameObject3D* p_GameObject) = 0;
+		virtual uint32_t LoadModelFromPack(const std::string& originalName) = 0;
+		virtual uint32_t CompileForwardShaderFromPack(const std::string& vertexName) = 0;
+		virtual uint32_t LoadTextureFromPack(const std::string& originalName) = 0;
+		virtual uint32_t LoadMaterialFromPack(const std::string& originalName) = 0;
 	};
 
 	class MSAPI GraphicsDx11Exception : public Exception
@@ -38,6 +43,7 @@ namespace Mesa
 	{
 	public:
 		GraphicsDx11(Window* p_Window);
+		GraphicsDx11(HWND hWnd, uint32_t width, uint32_t height);
 		~GraphicsDx11();
 
 	public: // Frame drawing functions
@@ -51,12 +57,19 @@ namespace Mesa
 		std::map<std::string, uint32_t> CompileDeferredShaderPack(const std::string& packPath) override;
 		std::map<std::string, uint32_t> LoadTexturePack(const std::string& packPath) override;
 		std::map<std::string, uint32_t> LoadModelPack(const std::string& packPath) override;
+		std::map<std::string, uint32_t> LoadMaterialPack(const std::string& packPath) override;
+
+		uint32_t LoadModelFromPack(const std::string& originalName) override;
+		uint32_t CompileForwardShaderFromPack(const std::string& vertexName) override;
+		uint32_t LoadTextureFromPack(const std::string& originalName) override;
+		uint32_t LoadMaterialFromPack(const std::string& originalName) override;
 
 	public: // Getters
 		uint32_t GetShaderIdByVertexName(const std::string& name);
 		uint32_t GetShaderIdByPixelName(const std::string& name);
 		uint32_t GetTextureIdByName(const std::string& name);
 		uint32_t GetModelIdByName(const std::string& name);
+		uint32_t GetMaterialIdByName(const std::string& name);
 
 	private: // Pipeline initialization functions
 		void InitializeFactory();
@@ -79,6 +92,9 @@ namespace Mesa
 	private: // Rendering functions
 		void RenderColorBuffer(int layer);
 
+	private: // Synchronus asset loading functions
+		std::map<std::string, std::string> LoadMaterialDefinitions(const std::string& matDefName);
+
 	private: // Asynchronus asset loading functions
 		static void CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx, std::string vertexName, std::string pixelName);
 		static void CompileVertexShader(std::vector<uint8_t> v_VertexData, ShaderType type, ID3D11VertexShader** pp_Shader, ID3D11InputLayout** pp_Layout, GraphicsDx11* p_Gfx);
@@ -89,6 +105,8 @@ namespace Mesa
 		static void CreateVertexBuffer(std::vector<VertexDx11> v_verts, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result);
 		static void CreateIndexBuffer(std::vector<uint32_t> v_inds, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result);
 		static void CreateEmptyBuffer(size_t size, UINT bindFlag, D3D11_USAGE usage, UINT cpuAccess, GraphicsDx11* p_Gfx, ID3D11Buffer** pp_Buffer, bool& result);
+		static void CreateMaterial(std::vector<uint8_t> v_MatData, GraphicsDx11* p_Gfx, std::string matName);
+		static void LoadTextureFromPackAsync(std::string originalName, GraphicsDx11* p_Gfx);
 
 	private: // ID generating functions
 		uint32_t GenerateShaderUID();
@@ -127,6 +145,7 @@ namespace Mesa
 		std::vector<ShaderDx11> mv_Shaders;
 		std::vector<TextureDx11> mv_Textures;
 		std::vector<ModelDx11> mv_Models;
+		std::vector<Material> mv_Materials;
 
 	private: // Vector to hold drawable game objects
 		std::vector<GameObject3D*> mv_Objects;

@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{4b50117b-6eb3-4cbf-b72d-769901d389c6}</ProjectGuid>
-    <RootNamespace>MesaCoreWin32</RootNamespace>
+    <ProjectGuid>{7d2422ca-b049-410d-98fb-cc4cbf750370}</ProjectGuid>
+    <RootNamespace>MaterialEditWin32</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -40,13 +40,13 @@
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -70,12 +70,6 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(ProjectDir)include;$(IncludePath)</IncludePath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(ProjectDir)include;$(IncludePath)</IncludePath>
-  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -115,7 +109,6 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>dxgi.lib;d3d11.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -131,43 +124,15 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>dxgi.lib;d3d11.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="include\Mesa\Application.h" />
-    <ClInclude Include="include\Mesa\Camera.h" />
-    <ClInclude Include="include\Mesa\CompressionUtils.h" />
-    <ClInclude Include="include\Mesa\ConfigUtils.h" />
-    <ClInclude Include="include\Mesa\ConstBuffer.h" />
-    <ClInclude Include="include\Mesa\ConvertUtils.h" />
-    <ClInclude Include="include\Mesa\Core.h" />
-    <ClInclude Include="include\Mesa\Entrypoint.h" />
-    <ClInclude Include="include\Mesa\Event.h" />
-    <ClInclude Include="include\Mesa\Exception.h" />
-    <ClInclude Include="include\Mesa\FileUtils.h" />
-    <ClInclude Include="include\Mesa\GameObject.h" />
-    <ClInclude Include="include\Mesa\GfxUtils.h" />
-    <ClInclude Include="include\Mesa\Graphics.h" />
-    <ClInclude Include="include\Mesa\LookUpUtils.h" />
-    <ClInclude Include="include\Mesa\Mesa.h" />
-    <ClInclude Include="include\Mesa\Window.h" />
+    <ClInclude Include="Core.h" />
+    <ClInclude Include="Editor.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="source\GfxUtils.cpp" />
-    <ClCompile Include="source\Camera.cpp" />
-    <ClCompile Include="source\GameObject.cpp" />
-    <ClCompile Include="source\LookUpUtils.cpp" />
-    <ClCompile Include="source\Application.cpp" />
-    <ClCompile Include="source\CompressionUtils.cpp" />
-    <ClCompile Include="source\ConfigUtils.cpp" />
-    <ClCompile Include="source\ConvertUtils.cpp" />
-    <ClCompile Include="source\Event.cpp" />
-    <ClCompile Include="source\Exception.cpp" />
-    <ClCompile Include="source\FileUtils.cpp" />
-    <ClCompile Include="source\Graphics.cpp" />
-    <ClCompile Include="source\GraphicsDx11.cpp" />
-    <ClCompile Include="source\Window.cpp" />
+    <ClCompile Include="Editor.cpp" />
+    <ClCompile Include="main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

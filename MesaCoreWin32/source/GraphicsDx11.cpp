@@ -80,6 +80,50 @@ namespace Mesa
         LOG_F(INFO, "Blend state initialized");
     }
 
+    /*
+        Constructor: initializes DirectX 11 rendering pipeline.
+        Intended to be used with non-GLFW windows
+    */
+    GraphicsDx11::GraphicsDx11(HWND hWnd, uint32_t width, uint32_t height)
+    {
+        LOG_F(INFO, "Initializing DirectX 11 renderer...");
+
+        // Initialize DXGI Factory to retrieve an adapter.
+        InitializeFactory();
+        LOG_F(INFO, "DXGI Factory initialized");
+
+        // Identify the physical hardware (GPU) to be used for rendering.
+        mp_Adapter = FindSuitableAdapter();
+        // Create the logical Device (resource creator) and Context (command issuer).
+        InitializeDevice();
+        LOG_F(INFO, "Device and device context initialized");
+        // Create the Swap Chain to manage front/back buffers for the given window.
+        InitializeSwapChain(hWnd, width, height);
+        LOG_F(INFO, "SwapChain initialized");
+        // Set up Depth/Stencil infrastructure (Z-Buffer).
+        InitializeDepthBuffer(width, height);
+        LOG_F(INFO, "Depth/stencil buffer initialized");
+        InitializeDepthState();
+        LOG_F(INFO, "Depth/stencil state initialized");
+        InitializeDepthView();
+        LOG_F(INFO, "Depth/stencil view initialized ");
+        // Initialize the Render Target View (RTV).
+        InitializeRenderTargetView();
+        LOG_F(INFO, "Render target view initialized ");
+        // Define the Viewport to map 3D clip space to the 2D window pixel area.
+        InitializeViewport(width, height);
+        LOG_F(INFO, "Viewport initialized ");
+        // Configure the Rasterizer (Culling, Fill Mode, etc.).
+        InitializeRasterizer();
+        LOG_F(INFO, "Rasterizer initialized");
+        // Configure the Sampler
+        InitializeSampler();
+        LOG_F(INFO, "Sampler initialized");
+        // Configure blend state
+        InitializeBlendState();
+        LOG_F(INFO, "Blend state initialized");
+    }
+
     GraphicsDx11::~GraphicsDx11()
     {
     }
@@ -278,13 +322,13 @@ namespace Mesa
     }
 
     /*
-        Loads texture packs from archive
+        Loads textures from archive
     */
     std::map<std::string, uint32_t> GraphicsDx11::LoadTexturePack(const std::string& packPath)
     {
-        std::string textureDir = ConfigUtils::GetValueFromConfigCS("Path", "Texture");
+        std::string matDir = ConfigUtils::GetValueFromConfigCS("Path", "Texture");
 
-        std::string relativePackPath = FileUtils::CombinePaths(textureDir, packPath);
+        std::string relativePackPath = FileUtils::CombinePaths(matDir, packPath);
 
         // Read the contents of the pack
         std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(relativePackPath);
@@ -325,7 +369,7 @@ namespace Mesa
             uint64_t startPos = v_startingPositions[v_entries[i].m_Index];
             memcpy(&v_DataBuffer[0], &v_PackData[startPos], v_entries[i].m_Size);
 
-            // Begin decoding texture on another thread
+            // Begin decoding material on another thread
             v_LoadThreads.push_back(std::thread(GraphicsDx11::LoadTexture, v_DataBuffer, this, v_entries[i].m_OriginalName));
         }
 
@@ -346,6 +390,9 @@ namespace Mesa
         return result;
     }
 
+    /*
+       Loads model from archive
+    */
     std::map<std::string, uint32_t> GraphicsDx11::LoadModelPack(const std::string& packPath)
     {
         std::string modelDir = ConfigUtils::GetValueFromConfigCS("Path", "Model");
@@ -413,6 +460,393 @@ namespace Mesa
     }
 
     /*
+       Loads material from archive
+    */
+    std::map<std::string, uint32_t> GraphicsDx11::LoadMaterialPack(const std::string& packPath)
+    {
+        std::string modelDir = ConfigUtils::GetValueFromConfigCS("Path", "Material");
+
+        std::string relativePackPath = FileUtils::CombinePaths(modelDir, packPath);
+
+        // Read the contents of the pack
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(relativePackPath);
+        if (v_PackData.empty()) return std::map<std::string, uint32_t>();
+
+        // Search the lookup table for files in this pack
+        auto v_entries = LookUpUtils::LoadSpecificPackInfo(packPath);
+
+        // Calculate number of files in pack
+        uint32_t numFilesInPack = 0;
+        memcpy(&numFilesInPack, &v_PackData[0], sizeof(uint32_t));
+
+        // Validate calculated number of files
+        if (numFilesInPack <= 0) return std::map<std::string, uint32_t>();
+        if (numFilesInPack != v_entries.size()) return std::map<std::string, uint32_t>();
+
+        // Calculate all starting positions for each file
+        std::vector<uint64_t> v_startingPositions;
+
+        for (int i = 0; i < numFilesInPack; i++)
+        {
+            uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * i;
+
+            uint64_t startPos = 0;
+            memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+            v_startingPositions.push_back(startPos - 1);
+        }
+
+        std::vector<std::thread> v_LoadThreads;
+
+        for (int i = 0; i < v_entries.size(); i++)
+        {
+            // Load model data
+            std::vector<uint8_t> v_DataBuffer;
+            v_DataBuffer.resize(v_entries[i].m_Size);
+
+            uint64_t startPos = v_startingPositions[v_entries[i].m_Index];
+            memcpy(&v_DataBuffer[0], &v_PackData[startPos], v_entries[i].m_Size);
+
+            // Begin importing models on another thread
+            v_LoadThreads.push_back(std::thread(GraphicsDx11::CreateMaterial, v_DataBuffer, this, v_entries[i].m_OriginalName));
+        }
+
+        // Join all compilation threads
+        for (auto& ldThread : v_LoadThreads)
+        {
+            ldThread.join();
+        }
+
+        std::map<std::string, uint32_t> result;
+
+        // Associate model ids with their names
+        for (int i = 0; i < v_entries.size(); i++)
+        {
+            result[v_entries[i].m_OriginalName] = GetMaterialIdByName(v_entries[i].m_OriginalName);
+        }
+
+        return result;
+    }
+
+    /*
+        Loads specifed model from a model pack
+    */
+    uint32_t GraphicsDx11::LoadModelFromPack(const std::string& originalName)
+    {
+        // Use lookup table to find in which pack the model is contained in
+        // and what index it has
+        auto packName = LookUpUtils::FindFilePack(originalName);
+        auto packIndex = LookUpUtils::FindFileIndex(originalName);
+
+        // Validate lookup results
+        if (packName.empty() || !packIndex.has_value())
+        {
+            LOG_F(ERROR, "Could not find %s in lookup table!", originalName.c_str());
+            return 0;
+        }
+
+        // Read pack contents
+        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Model"), packName);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+
+        if (v_PackData.empty())
+        {
+            LOG_F(ERROR, "Could not read %s", packPath.c_str());
+            return 0;
+        }
+
+        // Calculate where file details are
+        uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * packIndex.value();
+
+        // Validate calculation results
+        if (headerPos >= v_PackData.size())
+        {
+            LOG_F(ERROR, "Invalid header position of %s", originalName.c_str());
+            return 0;
+        }
+
+        // Calculate where file data starts
+        uint64_t startPos = 0;
+        memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+        // Validate calculation results
+        if (startPos <= headerPos)
+        {
+            LOG_F(ERROR, "Invalid starting position of %s", originalName.c_str());
+            return 0;
+        }
+
+        // Grab file size
+        uint32_t fileSize = 0;
+        memcpy(&fileSize, &v_PackData[headerPos + sizeof(uint64_t)], sizeof(uint32_t));
+
+        // Validate file size
+        if(fileSize <= 0)
+        {
+            LOG_F(ERROR, "Invalid size of %s", originalName.c_str());
+            return 0;
+        }
+
+        // Load model data
+        std::vector<uint8_t> v_ModelData(fileSize);
+        memcpy(&v_ModelData[0], &v_PackData[startPos - 1], fileSize);
+
+        // Import loaded data using ASSIMP
+        LoadModel(v_ModelData, this, originalName);
+
+        return GetModelIdByName(originalName);
+    }
+
+    /*
+        Compiles a specifed forward rendering shader from a shader pack
+    */
+    uint32_t GraphicsDx11::CompileForwardShaderFromPack(const std::string& vertexName)
+    {
+        // Find pack that contains specified file
+        auto packName = LookUpUtils::FindFilePack(vertexName);
+        if (packName.empty())
+        {
+            LOG_F(ERROR, "Could not find pack with %s", vertexName.c_str());
+            return 0;
+        }
+
+        // Check if the pack also contains pixel shader
+        auto v_FilesInPack = LookUpUtils::GetFileNamesFromPack(packName);
+        if (v_FilesInPack.size() <= 1)
+        {
+            LOG_F(ERROR, "Not enough files in %s", packName.c_str());
+            return 0;
+        }
+
+        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Shader"), packName);
+
+        // Calculate pixel shader position using vertex shader index
+        auto vertexIndex = LookUpUtils::FindFileIndex(vertexName);
+        if (!vertexIndex.has_value())
+        {
+            LOG_F(ERROR, "Failed to find %s index", vertexName.c_str());
+            return 0;
+        }
+
+        // Since it is required that pixel shader is right after the vertex
+        // shader assume it is the next file in pack
+        uint32_t pixelIndex = vertexIndex.value() + 1;
+
+        // Grab pixel shader name
+        auto pixelName = LookUpUtils::GetFileNameFromPack(packName, pixelIndex);
+        if (pixelName.empty())
+        {
+            LOG_F(ERROR, "Could not read pixel shader name");
+            return 0;
+        }
+
+        // Load pack contents
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+
+        // Validate loading results
+        if (v_PackData.empty())
+        {
+            LOG_F(ERROR, "Could not read %s", packPath.c_str());
+            return 0;
+        }
+
+        // Calculate header positions
+        uint32_t vertexHeadPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * vertexIndex.value();
+        uint32_t pixelHeadPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * pixelIndex;
+
+        // Validate header positions
+        if (vertexHeadPos >= v_PackData.size() || pixelHeadPos >= v_PackData.size())
+        {
+            LOG_F(ERROR, "Invalid header position of %s", vertexName.c_str());
+            return 0;
+        }
+
+        // Calculate where the data actually begins
+        uint64_t vertexStartPos = 0;
+        uint64_t pixelStartPos = 0;
+
+        memcpy(&vertexStartPos, &v_PackData[vertexHeadPos], sizeof(uint64_t));
+        memcpy(&pixelStartPos, &v_PackData[pixelHeadPos], sizeof(uint64_t));
+
+        // Validate calculation results
+        if (vertexStartPos <= vertexHeadPos || pixelStartPos <= pixelHeadPos)
+        {
+            LOG_F(ERROR, "Invalid header position of %s", vertexName.c_str());
+            return 0;
+        }
+
+        // Grab file sizes
+        uint64_t vertexSize = 0;
+        uint64_t pixelSize = 0;
+
+        memcpy(&vertexSize, &v_PackData[vertexHeadPos + sizeof(uint64_t)], sizeof(uint32_t));
+        memcpy(&pixelSize, &v_PackData[pixelHeadPos + sizeof(uint64_t)], sizeof(uint32_t));
+
+        // Validate file sizes
+        if (vertexSize <= 0 || pixelSize <= 0)
+        {
+            LOG_F(ERROR, "Invalid size of %s", vertexName.c_str());
+            return 0;
+        }
+
+        // Load actuall shader data from pack
+        std::vector<uint8_t> v_VertexData(vertexSize);
+        std::vector<uint8_t> v_PixelData(pixelSize);
+
+        memcpy(&v_VertexData[0], &v_PackData[vertexStartPos - 1], vertexSize);
+        memcpy(&v_PixelData[0], &v_PackData[pixelStartPos - 1], pixelSize);
+
+        // Compile shaders
+        CompileShader(v_VertexData, v_PixelData, ShaderType_Forward, this, vertexName, pixelName);
+
+        return GetShaderIdByVertexName(vertexName);
+    }
+
+    /*
+        Loads specifed texture from a texture pack
+    */
+    uint32_t GraphicsDx11::LoadTextureFromPack(const std::string& originalName)
+    {
+        // Use lookup table to find in which pack the texture is contained in
+        // and what index it has
+        auto packName = LookUpUtils::FindFilePack(originalName);
+        auto packIndex = LookUpUtils::FindFileIndex(originalName);
+
+        // Validate lookup results
+        if (packName.empty() || !packIndex.has_value())
+        {
+            LOG_F(ERROR, "Could not find %s in lookup table!", originalName.c_str());
+            return 0;
+        }
+
+        // Read pack contents
+        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Texture"), packName);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+
+        if (v_PackData.empty())
+        {
+            LOG_F(ERROR, "Could not read %s", packPath.c_str());
+            return 0;
+        }
+
+        // Calculate where file details are
+        uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * packIndex.value();
+
+        // Validate calculation results
+        if (headerPos >= v_PackData.size())
+        {
+            LOG_F(ERROR, "Invalid header position of %s", originalName.c_str());
+            return 0;
+        }
+
+        // Calculate where file data starts
+        uint64_t startPos = 0;
+        memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+        // Validate calculation results
+        if (startPos <= headerPos)
+        {
+            LOG_F(ERROR, "Invalid starting position of %s", originalName.c_str());
+            return 0;
+        }
+
+        // Grab file size
+        uint32_t fileSize = 0;
+        memcpy(&fileSize, &v_PackData[headerPos + sizeof(uint64_t)], sizeof(uint32_t));
+
+        // Validate file size
+        if (fileSize <= 0)
+        {
+            LOG_F(ERROR, "Invalid size of %s", originalName.c_str());
+            return 0;
+        }
+
+        // Load texture data
+        std::vector<uint8_t> v_TextureData(fileSize);
+        memcpy(&v_TextureData[0], &v_PackData[startPos - 1], fileSize);
+
+        LoadTexture(v_TextureData, this, originalName);
+
+        return GetTextureIdByName(originalName);
+    }
+
+    /*
+        Loads single material from pack
+    */
+    uint32_t GraphicsDx11::LoadMaterialFromPack(const std::string& originalName)
+    {
+        uint32_t existsCheck = GetMaterialIdByName(originalName);
+
+        if (existsCheck != 0)
+        {
+            LOG_F(INFO, "%s already loaded with ID = %u", originalName.c_str(), existsCheck);
+            return existsCheck;
+        }
+
+        // Use lookup table to find in which pack the texture is contained in
+        // and what index it has
+        auto packName = LookUpUtils::FindFilePack(originalName);
+        auto packIndex = LookUpUtils::FindFileIndex(originalName);
+
+        // Validate lookup results
+        if (packName.empty() || !packIndex.has_value())
+        {
+            LOG_F(ERROR, "Could not find %s in lookup table!", originalName.c_str());
+            return 0;
+        }
+
+        // Read pack contents
+        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Material"), packName);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+
+        if (v_PackData.empty())
+        {
+            LOG_F(ERROR, "Could not read %s", packPath.c_str());
+            return 0;
+        }
+
+        // Calculate where file details are
+        uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * packIndex.value();
+
+        // Validate calculation results
+        if (headerPos >= v_PackData.size())
+        {
+            LOG_F(ERROR, "Invalid header position of %s", originalName.c_str());
+            return 0;
+        }
+
+        // Calculate where file data starts
+        uint64_t startPos = 0;
+        memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+        // Validate calculation results
+        if (startPos <= headerPos)
+        {
+            LOG_F(ERROR, "Invalid starting position of %s", originalName.c_str());
+            return 0;
+        }
+
+        // Grab file size
+        uint32_t fileSize = 0;
+        memcpy(&fileSize, &v_PackData[headerPos + sizeof(uint64_t)], sizeof(uint32_t));
+
+        // Validate file size
+        if (fileSize <= 0)
+        {
+            LOG_F(ERROR, "Invalid size of %s", originalName.c_str());
+            return 0;
+        }
+
+        // Load texture data
+        std::vector<uint8_t> v_MatData(fileSize);
+        memcpy(&v_MatData[0], &v_PackData[startPos - 1], fileSize);
+
+        CreateMaterial(v_MatData, this, originalName);
+
+        return GetMaterialIdByName(originalName);
+    }
+
+    /*
         Returns shader ID if the its vertex name matches with provided string
     */
     uint32_t GraphicsDx11::GetShaderIdByVertexName(const std::string& name)
@@ -468,7 +902,22 @@ namespace Mesa
                 return model.GetModelUID();
         }
 
-        // If model ID can't be found return 0 to indicate that the texture isn't loaded
+        // If model ID can't be found return 0 to indicate that the model isn't loaded
+        return 0;
+    }
+
+    /*
+        Returns material ID if the its name matches with provided string
+    */
+    uint32_t GraphicsDx11::GetMaterialIdByName(const std::string& name)
+    {
+        for (const auto& material : mv_Materials)
+        {
+            if (strcmp(material.GetMaterialName().c_str(), name.c_str()) == 0)
+                return material.GetMaterialUID();
+        }
+
+        // If model ID can't be found return 0 to indicate that the material isn't loaded
         return 0;
     }
 
@@ -738,6 +1187,8 @@ namespace Mesa
 
         // Create the immutable sampler state object on the GPU.
         THROW_IF_FAILED_DX(mp_Device->CreateSamplerState(&desc, mp_Sampler.GetAddressOf()));
+
+        mp_Context->PSSetSamplers(0, 1, mp_Sampler.GetAddressOf());
     }
 
     /*
@@ -836,20 +1287,31 @@ namespace Mesa
                 v_indices.push_back(face.mIndices[j]);
         }
 
-        bool vertexResult, indexResult;
+        bool vertexResult, indexResult, colorPassResult, specPassResult;
 
         // Create index and vertex buffers
         std::thread vertexThread(GraphicsDx11::CreateVertexBuffer, v_vertices, mesh.mp_VertexBuffer.GetAddressOf(), this, std::ref(vertexResult));
         std::thread indexThread(GraphicsDx11::CreateIndexBuffer, v_indices, mesh.mp_IndexBuffer.GetAddressOf(), this, std::ref(indexResult));
+        std::thread colorPassThread(GraphicsDx11::CreateEmptyBuffer, sizeof(ConstBufferDx11::MaterialBufferColorPass), D3D11_BIND_CONSTANT_BUFFER, D3D11_USAGE_DEFAULT, 0, this, mesh.mp_ColorPassBuffer.GetAddressOf(), std::ref(colorPassResult));
+        std::thread specularPassThread(GraphicsDx11::CreateEmptyBuffer, sizeof(ConstBufferDx11::MaterialBufferSpecularPass), D3D11_BIND_CONSTANT_BUFFER, D3D11_USAGE_DEFAULT, 0, this, mesh.mp_SpecularPassBuffer.GetAddressOf(), std::ref(specPassResult));
 
         vertexThread.join();
         indexThread.join();
+        colorPassThread.join();
+        specularPassThread.join();
 
         // Validate creation results
-        if (!vertexResult || !indexResult)
+        if (!vertexResult || !indexResult || !colorPassResult || !specPassResult)
         {
             LOG_F(ERROR, "Creation of one or more buffers failed!");
             return MeshDx11();
+        }
+
+        if (p_Mesh->mMaterialIndex >= 0)
+        {
+            aiMaterial* material = p_Scene->mMaterials[p_Mesh->mMaterialIndex];
+
+            mesh.m_MeshMatName = material->GetName().C_Str();
         }
 
         // Save number of indices
@@ -860,7 +1322,7 @@ namespace Mesa
 
     void GraphicsDx11::RenderColorBuffer(int layer)
     {
-        float color[4] = { 0.0f, 1.0f, 0.0f, 0.0f };
+        float color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
         mp_Context->ClearRenderTargetView(mp_RenderTarget.Get(), color);
         mp_Context->ClearDepthStencilView(mp_DepthView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
@@ -898,6 +1360,31 @@ namespace Mesa
                 
                 for (auto& mesh : model.mv_Meshes)
                 {
+                    if (mesh.m_MaterialId != 0)
+                    {
+                        for (const auto& mat : mv_Materials)
+                        {
+                            if (mat.GetMaterialUID() != mesh.m_MaterialId) continue;
+
+                            ConstBufferDx11::MaterialBufferColorPass cpBuffer = {};
+                            cpBuffer.m_BaseColor = ConvertUtils::Vec4ToXmFloat4(mat.GetBaseColor());
+                            cpBuffer.m_SubColor = ConvertUtils::Vec4ToXmFloat4(mat.GetSubColor());
+                            
+                            mp_Context->UpdateSubresource(mesh.mp_ColorPassBuffer.Get(), 0, nullptr, &cpBuffer, 0, 0);
+                            mp_Context->PSSetConstantBuffers(0, 1, mesh.mp_ColorPassBuffer.GetAddressOf());
+
+                            for (const auto& texture : mv_Textures)
+                            {
+                                if (texture.GetTextureUID() != mat.GetDiffuseTextureId()) continue;
+
+                                mp_Context->PSSetShaderResources(0, 1, texture.mp_ResourceView.GetAddressOf());
+                            }
+
+                        }
+
+                        
+                    }
+
                     UINT stride = sizeof(VertexDx11);
                     UINT offset = 0;
                     mp_Context->IASetVertexBuffers(0, 1, mesh.mp_VertexBuffer.GetAddressOf(), &stride, &offset);
@@ -906,6 +1393,81 @@ namespace Mesa
                 }
             }
         }
+    }
+
+    /*
+        Loads material definitions from specific file
+    */
+    std::map<std::string, std::string> GraphicsDx11::LoadMaterialDefinitions(const std::string& matDefName)
+    {
+        std::map<std::string, std::string> result;
+
+        // Use lookup table to find in which pack the model is contained in
+        // and what index it has
+        auto entryData = LookUpUtils::FindByFileNameOnly(matDefName);
+
+        // Validate lookup results
+        if (entryData.m_PackName.empty())
+        {
+            LOG_F(ERROR, "Could not find %s in lookup table!", matDefName.c_str());
+            return result;
+        }
+
+        // Read pack contents
+        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Model"), entryData.m_PackName);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+
+        // Calculate where file details are
+        uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * entryData.m_Index;
+
+        // Validate calculation results
+        if (headerPos >= v_PackData.size())
+        {
+            LOG_F(ERROR, "Invalid header position of %s", matDefName.c_str());
+            return result;
+        }
+
+        // Calculate where file data starts
+        uint64_t startPos = 0;
+        memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+        // Validate calculation results
+        if (startPos <= headerPos)
+        {
+            LOG_F(ERROR, "Invalid starting position of %s", matDefName.c_str());
+            return result;
+        }
+
+        // Grab file size
+        uint32_t fileSize = 0;
+        memcpy(&fileSize, &v_PackData[headerPos + sizeof(uint64_t)], sizeof(uint32_t));
+
+        // Validate file size
+        if (fileSize <= 0)
+        {
+            LOG_F(ERROR, "Invalid size of %s", matDefName.c_str());
+            return result;
+        }
+
+        // Load matdef data
+        std::vector<uint8_t> v_MatDefData(fileSize);
+        memcpy(&v_MatDefData[0], &v_PackData[startPos - 1], fileSize);
+
+        std::string matDefText = std::string(v_MatDefData.begin(), v_MatDefData.end());
+
+        matDefText = ConvertUtils::RemoveCharFromString(matDefText, '\r');
+        std::vector<std::string> v_Lines = ConvertUtils::SplitStringByChar(matDefText, '\n');
+
+        for (const auto& line : v_Lines)
+        {
+            std::vector<std::string> v_Params = ConvertUtils::SplitStringByChar(line, '=');
+
+            if (v_Params.size() < 2) continue;
+
+            result[v_Params[0]] = v_Params[1];
+        }
+
+        return result;
     }
 
     /*
@@ -1063,7 +1625,10 @@ namespace Mesa
     {
         // Check if the texture is already loaded
         if (p_Gfx->GetTextureIdByName(textureName) != 0)
+        {
+            LOG_F(INFO, "%s already loaded with ID = %u", p_Gfx->GetTextureIdByName(textureName));
             return;
+        }
 
         LOG_F(INFO, "Loading %s", textureName.c_str());
 
@@ -1137,6 +1702,11 @@ namespace Mesa
     {
         LOG_F(INFO, "Loading %s", modelName.c_str());
 
+        std::string matDefName = FileUtils::StripPathToFileName(modelName);
+        matDefName += ".matdef";
+
+        auto matDef = p_Gfx->LoadMaterialDefinitions(matDefName);
+
         Assimp::Importer importer;
 
         // Read raw bytes and treat them as a contents of FBX file
@@ -1164,6 +1734,12 @@ namespace Mesa
         {
             LOG_F(ERROR, "Cration of constant buffer failed!");
             return;
+        }
+
+        for (auto& mesh : model.mv_Meshes)
+        {
+            mesh.m_MaterialName = ConvertUtils::ReplaceCharInString(matDef[mesh.m_MeshMatName], '\\', '/');
+            mesh.m_MaterialId = p_Gfx->LoadMaterialFromPack(mesh.m_MaterialName);
         }
 
         // Fill out the rest of the model details
@@ -1260,6 +1836,171 @@ namespace Mesa
         return;
     }
 
+    void GraphicsDx11::CreateMaterial(std::vector<uint8_t> v_MatData, GraphicsDx11* p_Gfx, std::string matName)
+    {
+        std::string matText = std::string(v_MatData.begin(), v_MatData.end());
+        matText = ConvertUtils::RemoveCharFromString(matText, '\r');
+
+        // Split material text into single lines
+        std::vector<std::string> v_Lines = ConvertUtils::SplitStringByChar(matText, '\n');
+
+        Material material = {};
+        glm::vec4 baseColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        glm::vec4 subColor = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+        float specPower = 1.0f;
+        std::string diffTex, normTex, specTex;
+
+        // Create threads that texture loading functions will be sent to
+        std::thread diffThread, normThread, specThread;
+
+        for (const auto& line : v_Lines)
+        {
+            // Skip lines that are empty or simply have only newline character
+            if (line.empty() || strcmp(line.c_str(), "\n") == 0) continue;
+
+            // Split line into single words
+            std::vector<std::string> v_Words = ConvertUtils::SplitStringByChar(line, '=');
+
+            // Skip line that have only one word since all parameters require at least two
+            if (v_Words.size() <= 1) continue;
+
+            // Base color parameters
+            if (strcmp(v_Words[0].c_str(), "$base_r") == 0) baseColor.x = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$base_g") == 0) baseColor.y = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$base_b") == 0) baseColor.z = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$base_a") == 0) baseColor.w = ConvertUtils::StringToFloat(v_Words[1]);
+            // Sub color parameters
+            else if (strcmp(v_Words[0].c_str(), "$sub_r") == 0) subColor.x = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$sub_g") == 0) subColor.y = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$sub_b") == 0) subColor.z = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$sub_a") == 0) subColor.w = ConvertUtils::StringToFloat(v_Words[1]);
+            // Specular data
+            else if (strcmp(v_Words[0].c_str(), "$specular") == 0) specPower = ConvertUtils::StringToFloat(v_Words[1]);
+            // Texture data
+            else if (strcmp(v_Words[0].c_str(), "$diffuseTex") == 0)
+            {
+                diffThread = std::thread(LoadTextureFromPackAsync, v_Words[1], p_Gfx);
+                diffTex = v_Words[1];
+            }
+            else if (strcmp(v_Words[0].c_str(), "$specularTex") == 0)
+            {
+                specThread = std::thread(LoadTextureFromPackAsync, v_Words[1], p_Gfx);
+                specTex = v_Words[1];
+            }
+            else if (strcmp(v_Words[0].c_str(), "$normalTex") == 0)
+            {
+                normThread = std::thread(LoadTextureFromPackAsync, v_Words[1], p_Gfx);
+                specTex = v_Words[1];
+            }
+        }
+
+        // Check if other threads were started and if yes join them
+        if (normThread.get_id() != std::thread::id()) {
+            if (normThread.joinable())
+                normThread.join();
+            else
+                LOG_F(ERROR, "Normal thread was started but is not joinable!");
+        }
+
+        if (diffThread.get_id() != std::thread::id()) {
+            if (diffThread.joinable())
+                diffThread.join();
+            else
+                LOG_F(ERROR, "Diffuse thread was started but is not joinable!");
+        }
+
+        if (specThread.get_id() != std::thread::id()) {
+            if (specThread.joinable())
+                specThread.join();
+            else
+                LOG_F(ERROR, "Specular thread was started but is not joinable!");
+        }
+
+        // Set material properties
+        material.SetBaseColor(baseColor);
+        material.SetSubColor(subColor);
+        material.SetSpecularPower(specPower);
+        material.SetDiffuseTextureId(p_Gfx->GetTextureIdByName(diffTex));
+        material.SetSpecularTextureId(p_Gfx->GetTextureIdByName(specTex));
+        material.SetNormalTextureId(p_Gfx->GetTextureIdByName(normTex));
+        material.m_MaterialName = matName;
+
+        // Add material to Graphics class instance
+        p_Gfx->m_MaterialIdSemaphore.acquire();
+        material.m_MaterialId = p_Gfx->GenerateMaterialUID();
+        p_Gfx->mv_Materials.push_back(material);
+        p_Gfx->m_MaterialIdSemaphore.release();
+
+        LOG_F(INFO, "Material %s created with ID %u", material.GetMaterialName().c_str(), material.GetMaterialUID());
+    }
+
+    /*
+        Load specifed texture. 
+        Indended for asynchronous use.
+    */
+    void GraphicsDx11::LoadTextureFromPackAsync(std::string originalName, GraphicsDx11* p_Gfx)
+    {
+        // Use lookup table to find in which pack the texture is contained in
+            // and what index it has
+        auto packName = LookUpUtils::FindFilePack(originalName);
+        auto packIndex = LookUpUtils::FindFileIndex(originalName);
+
+        // Validate lookup results
+        if (packName.empty() || !packIndex.has_value())
+        {
+            LOG_F(ERROR, "Could not find %s in lookup table!", originalName.c_str());
+            return;
+        }
+
+        // Read pack contents
+        std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Texture"), packName);
+        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
+
+        if (v_PackData.empty())
+        {
+            LOG_F(ERROR, "Could not read %s", packPath.c_str());
+            return;
+        }
+
+        // Calculate where file details are
+        uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * packIndex.value();
+
+        // Validate calculation results
+        if (headerPos >= v_PackData.size())
+        {
+            LOG_F(ERROR, "Invalid header position of %s", originalName.c_str());
+            return;
+        }
+
+        // Calculate where file data starts
+        uint64_t startPos = 0;
+        memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+
+        // Validate calculation results
+        if (startPos <= headerPos)
+        {
+            LOG_F(ERROR, "Invalid starting position of %s", originalName.c_str());
+            return;
+        }
+
+        // Grab file size
+        uint32_t fileSize = 0;
+        memcpy(&fileSize, &v_PackData[headerPos + sizeof(uint64_t)], sizeof(uint32_t));
+
+        // Validate file size
+        if (fileSize <= 0)
+        {
+            LOG_F(ERROR, "Invalid size of %s", originalName.c_str());
+            return;
+        }
+
+        // Load texture data
+        std::vector<uint8_t> v_TextureData(fileSize);
+        memcpy(&v_TextureData[0], &v_PackData[startPos - 1], fileSize);
+
+        LoadTexture(v_TextureData, p_Gfx, originalName);
+    }
+
     /*
         Generate unique shader ID
     */
@@ -1325,7 +2066,7 @@ namespace Mesa
     }
 
     /*
-        Generate unique model ID
+        Generates unique model ID
     */
     uint32_t GraphicsDx11::GenerateModelUID()
     {
@@ -1356,8 +2097,35 @@ namespace Mesa
         return id;
     }
 
+    /*
+        Generates unique material ID
+    */
     uint32_t GraphicsDx11::GenerateMaterialUID()
     {
-        return 0;
+        // If no materials have been loaded yet don't bother looking for free ID and simply give it 1
+        if (mv_Materials.empty()) return 1;
+
+        // Start search with ID of 1 - (0 will be reserved for fallback material)
+        uint32_t id = 1;
+        bool idFound = false;
+
+        do {
+            idFound = false;
+
+            for (auto& material : mv_Materials)
+            {
+                // Check if ID is already in use
+                if (material.m_MaterialId == id)
+                    idFound = true;
+            }
+
+            // If ID is in use increment target ID and repeat the search
+            if (idFound)
+                id++;
+
+        } while (idFound);
+
+        // Return free ID
+        return id;
     }
 }

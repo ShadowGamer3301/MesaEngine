@@ -51,4 +51,75 @@ namespace Mesa
 
 		return v_result;
 	}
+
+	std::string LookUpUtils::FindFilePack(const std::string& fileName)
+	{
+		std::vector<LookUpEntry> v_entries = LoadLookupTable();
+
+		for (const auto& entry : v_entries)
+		{
+			if (strcmp(entry.m_OriginalName.c_str(), fileName.c_str()) == 0)
+				return entry.m_PackName;
+		}
+
+		return std::string();
+	}
+
+	std::optional<uint32_t> LookUpUtils::FindFileIndex(const std::string& fileName)
+	{
+		std::vector<LookUpEntry> v_entries = LoadLookupTable();
+
+		for (const auto& entry : v_entries)
+		{
+			if (strcmp(entry.m_OriginalName.c_str(), fileName.c_str()) == 0)
+				return entry.m_Index;
+		}
+
+		return std::optional<uint32_t>();
+	}
+
+	std::vector<std::string> LookUpUtils::GetFileNamesFromPack(const std::string& packName)
+	{
+		std::vector<LookUpEntry> v_entries = LoadLookupTable();
+
+		std::vector<std::string> v_result;
+
+		for (const auto& entry : v_entries)
+		{
+			if (strcmp(packName.c_str(), entry.m_PackName.c_str()) == 0)
+				v_result.push_back(entry.m_OriginalName);
+		}
+
+		return v_result;
+	}
+
+	std::string LookUpUtils::GetFileNameFromPack(const std::string& packName, const uint32_t index)
+	{
+		std::vector<LookUpEntry> v_entries = LoadSpecificPackInfo(packName);
+
+		for (const auto& entry : v_entries)
+		{
+			if (entry.m_Index == index)
+				return entry.m_OriginalName;
+		}
+
+		return std::string();
+	}
+
+	LookUpEntry LookUpUtils::FindByFileNameOnly(const std::string& fileName)
+	{
+		std::vector<LookUpEntry> v_entries = LoadLookupTable();
+
+		std::vector<std::string> v_result;
+
+		for (const auto& entry : v_entries)
+		{
+			std::string filenameOnly = FileUtils::StripPathToFileName(entry.m_OriginalName);
+			if (strcmp(fileName.c_str(), filenameOnly.c_str()) == 0)
+				return entry;
+		}
+
+		return LookUpEntry();
+	}
+
 }
