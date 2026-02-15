@@ -1550,7 +1550,27 @@ namespace Mesa
         mp_Context->IASetVertexBuffers(0, 1, mp_BlendingPlaneBuffer.GetAddressOf(), &stride, &offset);
         mp_Context->Draw(6, 0);
 
+        mp_Context->CopyResource(mp_PrevLayerColorBuffer.Get(), mp_BackBuffer.Get());
 
+        mp_Context->ClearRenderTargetView(mp_RenderTarget.Get(), color);
+        mp_Context->ClearDepthStencilView(mp_DepthView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+
+        for (const auto& shader : mv_Shaders)
+        {
+            if (m_BlendingShaderId != shader.GetShaderUID()) continue;
+
+            mp_Context->VSSetShader(shader.mp_VertexShader.Get(), nullptr, 0);
+            mp_Context->PSSetShader(shader.mp_PixelShader.Get(), nullptr, 0);
+            mp_Context->IASetInputLayout(shader.mp_InputLayout.Get());
+        }
+
+        mp_Context->PSSetShaderResources(0, 1, mp_SpecResourceView.GetAddressOf());
+        mp_Context->PSSetShaderResources(1, 1, mp_PrevSpecResourceView.GetAddressOf());
+
+        mp_Context->IASetVertexBuffers(0, 1, mp_BlendingPlaneBuffer.GetAddressOf(), &stride, &offset);
+        mp_Context->Draw(6, 0);
+
+        mp_Context->CopyResource(mp_PrevLayerSpecBuffer.Get(), mp_BackBuffer.Get());
     }
 
     /*
