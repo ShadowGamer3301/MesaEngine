@@ -26,6 +26,37 @@ inline std::string PackData(const std::string& path, const std::string& targetPa
 				// Skip to the next line
 				continue;
 			}
+			// * sign marks that line includes a directory (all files from directory will be included in the pack)
+			if (line[0] == '*')
+			{
+				//Remove star sign from the beginning
+				std::string path = Mesa::ConvertUtils::RemoveCharFromString(line, '*');
+
+				//Get all filenames in the directory
+				auto v_FileNames = Mesa::FileUtils::GetFileNamesInDirectory(path);
+
+				for (const auto& fn : v_FileNames)
+				{
+					// Generate has of a file
+					std::stringstream fn_hashStream;
+					fn_hashStream << std::hex << Mesa::FileUtils::HashFile(fn) << std::dec;
+
+					// Fill out entry data
+					Entry fn_entry = {};
+					fn_entry.m_Index = currentIndex;
+					fn_entry.m_OriginalName = fn;
+					fn_entry.m_PackName = currentPackName;
+					fn_entry.m_Hash = fn_hashStream.str();
+					fn_entry.m_OriginalSize = Mesa::FileUtils::FileSize(fn);
+
+					currentIndex++;
+
+					// Push entry data to vector
+					v_Entries.push_back(fn_entry);
+				}
+
+				continue;
+			}
 
 			// Generate has of a file
 			std::stringstream hashStream;

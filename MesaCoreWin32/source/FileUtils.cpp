@@ -245,4 +245,25 @@ namespace Mesa
 		std::string result = p.filename().string();
 		return result;
 	}
+
+	std::vector<std::string> FileUtils::GetFileNamesInDirectory(const std::string& path)
+	{
+		std::vector<std::string> result;
+
+		try
+		{
+			for (const auto& entry : std::filesystem::directory_iterator(path))
+			{
+				std::filesystem::path p = entry.path();
+				result.push_back(p.string());
+			}
+
+			return result;
+		}
+		catch (const std::filesystem::filesystem_error& fe)
+		{
+			LOG_F(ERROR, "%s", fe.what());
+			return result;
+		}
+	}
 }
