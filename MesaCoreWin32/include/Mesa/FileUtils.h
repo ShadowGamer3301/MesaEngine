@@ -20,5 +20,6 @@ namespace Mesa
 		static std::string ReadTextData(const std::string& path);
 		static std::string StripExtensionFromPath(const std::string& path);
 		static std::string StripPathToFileName(const std::string& path);
+		static std::vector<std::string> GetFileNamesInDirectory(const std::string& path);
 	};
 }

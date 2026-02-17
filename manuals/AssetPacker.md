@@ -67,3 +67,13 @@ P_SecondShader.hlsl
 - Shaders used for forward and deferred rendering cannot be combined into one pack.
 - Shaders must be in their source code version (uncompiled HLSL code).
 - Only one pixel shader per vertex shader is premitted.
+- Directory commands cannot be used.
+
+## Directory commands
+Since build from 17.02.26 AssetPacker for MesaEngine now supports directory commands.
+This means that you can specify entire directory to pack and not the individual files.
+To mark line as directory put * sign in fron of it like this:
+```
+*Intermediate/Texture/
+```
+This specifies that you want to pack every file that is inside "Texture" directory.
