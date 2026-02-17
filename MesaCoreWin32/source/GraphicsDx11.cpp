@@ -587,27 +587,16 @@ namespace Mesa
 
         // Read pack contents
         std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Model"), packName);
-        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
 
-        if (v_PackData.empty())
-        {
-            LOG_F(ERROR, "Could not read %s", packPath.c_str());
-            return 0;
-        }
 
         // Calculate where file details are
         uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * packIndex.value();
 
-        // Validate calculation results
-        if (headerPos >= v_PackData.size())
-        {
-            LOG_F(ERROR, "Invalid header position of %s", originalName.c_str());
-            return 0;
-        }
-
         // Calculate where file data starts
         uint64_t startPos = 0;
-        memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+        auto v_HeaderData = FileUtils::LoadDataChunk(packPath, sizeof(uint64_t), headerPos);
+        memcpy(&startPos, &v_HeaderData[0], sizeof(uint64_t));
+        
 
         // Validate calculation results
         if (startPos <= headerPos)
@@ -618,7 +607,8 @@ namespace Mesa
 
         // Grab file size
         uint32_t fileSize = 0;
-        memcpy(&fileSize, &v_PackData[headerPos + sizeof(uint64_t)], sizeof(uint32_t));
+        auto v_FileSizeData = FileUtils::LoadDataChunk(packPath, sizeof(uint32_t), headerPos + sizeof(uint64_t));
+        memcpy(&fileSize, &v_FileSizeData[0], sizeof(uint32_t));
 
         // Validate file size
         if(fileSize <= 0)
@@ -628,8 +618,7 @@ namespace Mesa
         }
 
         // Load model data
-        std::vector<uint8_t> v_ModelData(fileSize);
-        memcpy(&v_ModelData[0], &v_PackData[startPos - 1], fileSize);
+        std::vector<uint8_t> v_ModelData = FileUtils::LoadDataChunk(packPath, fileSize, startPos - 1);
 
         // Import loaded data using ASSIMP
         LoadModel(v_ModelData, this, originalName);
@@ -884,6 +873,119 @@ namespace Mesa
         CreateMaterial(v_MatData, this, originalName);
 
         return GetMaterialIdByName(originalName);
+    }
+
+    uint32_t GraphicsDx11::LoadSourceModel(const std::string& originalName)
+    {
+        Assimp::Importer importer;
+
+        const aiScene* p_Scene = importer.ReadFile(originalName, aiProcess_Triangulate | aiProcess_ConvertToLeftHanded);
+
+        if (p_Scene == nullptr)
+        {
+            LOG_F(ERROR, "Failed to load %s! Error: %s", originalName.c_str(), importer.GetErrorString());
+            return 0;
+        }
+
+        ModelDx11 model = {};
+
+        ProcessNode(model, p_Scene->mRootNode, p_Scene);
+
+        bool bufResult = false;
+
+        // Create constant buffer for MVP matrix
+        GraphicsDx11::CreateEmptyBuffer(sizeof(ConstBufferDx11::MvpBuffer), D3D11_BIND_CONSTANT_BUFFER, D3D11_USAGE_DEFAULT, 0, this, model.mp_ConstBufferMVP.GetAddressOf(), bufResult);
+
+        // Validate constant buffer creation
+        if (!bufResult)
+        {
+            LOG_F(ERROR, "Cration of constant buffer failed!");
+            return 0;
+        }
+
+        // Fill out the rest of the model details
+        model.m_ModelName = originalName;
+        m_ModelIdSemaphore.acquire();
+        model.m_ModelUID = GenerateModelUID();
+        mv_Models.push_back(model);
+        m_ModelIdSemaphore.release();
+        LOG_F(INFO, "%s loaded with UID = %u", model.GetModelName().c_str(), model.GetModelUID());
+
+        return model.GetModelUID();
+    }
+
+    uint32_t GraphicsDx11::LoadSourceTexture(const std::string& originalName)
+    {
+        // Check if the texture is already loaded
+        if (GetTextureIdByName(originalName) != 0)
+        {
+            LOG_F(INFO, "%s already loaded with ID = %u", GetTextureIdByName(originalName));
+            return 0;
+        }
+
+        LOG_F(INFO, "Loading %s", textureName.c_str());
+
+        // Create new texture instance
+        TextureDx11 texture = {};
+
+        // Create variables to store height and width of the texture
+        uint32_t width, height;
+
+        std::vector<uint8_t> v_DecodedBuffer;
+        uint32_t error = lodepng::decode(v_DecodedBuffer, width, height, originalName);
+        if (error)
+        {
+            LOG_F(ERROR, "Failed to decode %s", textureName.c_str());
+            return 0;
+        }
+
+        LOG_F(INFO, "Decoded %s", textureName.c_str());
+
+        // Fill out DirectX structures for texture
+        D3D11_TEXTURE2D_DESC desc = {};
+        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.CPUAccessFlags = 0;
+        desc.Width = width;
+        desc.Height = height;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+
+        D3D11_SUBRESOURCE_DATA initData = {};
+        initData.pSysMem = v_DecodedBuffer.data();
+        initData.SysMemPitch = width * 4;
+        initData.SysMemSlicePitch = width * height * 4;
+
+        HRESULT hr = mp_Device->CreateTexture2D(&desc, &initData, texture.mp_RawData.GetAddressOf());
+        if (FAILED(hr))
+        {
+            LOG_F(ERROR, "CreateTexture2D failed!");
+            return 0;
+        }
+
+        // Fill out DirectX structures for resource view
+        D3D11_SHADER_RESOURCE_VIEW_DESC srv = {};
+        srv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        srv.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        srv.Texture2D.MipLevels = 1;
+
+        hr = mp_Device->CreateShaderResourceView(texture.mp_RawData.Get(), &srv, texture.mp_ResourceView.GetAddressOf());
+        if (FAILED(hr))
+        {
+            LOG_F(ERROR, "CreateShaderResourceView failed!");
+            return 0;
+        }
+
+        // Fill out the rest of the texture details
+        texture.m_TextureName = textureName;
+        m_TextureIdSemaphore.acquire();
+        texture.m_TextureUID = GenerateTextureUID();
+        mv_Textures.push_back(texture);
+        m_TextureIdSemaphore.release();
+        LOG_F(INFO, "%s loaded with UID = %u", texture.GetTextureName().c_str(), texture.GetTextureUID());
+        return texture.GetTextureUID();
     }
 
     /*
