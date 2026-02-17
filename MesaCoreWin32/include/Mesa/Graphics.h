@@ -27,6 +27,7 @@ namespace Mesa
 		virtual uint32_t CompileForwardShaderFromPack(const std::string& vertexName) = 0;
 		virtual uint32_t LoadTextureFromPack(const std::string& originalName) = 0;
 		virtual uint32_t LoadMaterialFromPack(const std::string& originalName) = 0;
+		virtual void SetBlendingShader(uint32_t shaderId) = 0;
 	};
 
 	class MSAPI GraphicsDx11Exception : public Exception
@@ -51,6 +52,7 @@ namespace Mesa
 		void SetNumberOfLayers(const uint32_t& layers) override;
 		void SetCamera(Camera* p_Camera) override;
 		void InsertGameObject(GameObject3D* p_GameObject) override;
+		void SetBlendingShader(uint32_t shaderId) override;
 
 	public: // Asset loading functions
 		std::map<std::string, uint32_t> CompileForwardShaderPack(const std::string& packPath) override;
@@ -89,24 +91,46 @@ namespace Mesa
 		void ProcessNode(ModelDx11& outMdl, aiNode* p_Node, const aiScene* p_Scene);
 		MeshDx11 ProcessMesh(aiMesh* p_Mesh, const aiScene* p_Scene);
 
+	private: // Engine side assets initializers
+		void InitializeBlendingMesh();
+
 	private: // Rendering functions
 		void RenderColorBuffer(int layer);
+		void RenderSpecularBuffer(int layer);
+		void BlendLayers();
 
 	private: // Synchronus asset loading functions
 		std::map<std::string, std::string> LoadMaterialDefinitions(const std::string& matDefName);
 
 	private: // Asynchronus asset loading functions
+		// Vertex buffer creation
+		static void CreateVertexBuffer(std::vector<VertexDx11> v_verts, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result);
+		static void CreateDeferredVertexBuffer(std::vector<DeferredVertexDx11> v_verts, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result);
+		static void CreateVertexBufferCritical(std::vector<VertexDx11> v_verts, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx);
+		static void CreateDeferredVertexBufferCritical(std::vector<DeferredVertexDx11> v_verts, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx);
+
+		// Shader compilation
 		static void CompileShader(std::vector<uint8_t> v_VertexData, std::vector<uint8_t> v_PixelData, ShaderType type, GraphicsDx11* p_Gfx, std::string vertexName, std::string pixelName);
 		static void CompileVertexShader(std::vector<uint8_t> v_VertexData, ShaderType type, ID3D11VertexShader** pp_Shader, ID3D11InputLayout** pp_Layout, GraphicsDx11* p_Gfx);
 		static void CompilePixelShader(std::vector<uint8_t> v_PixelData, ShaderType type, ID3D11PixelShader** pp_Shader, GraphicsDx11* p_Gfx);
-		static void LoadTexture(std::vector<uint8_t> v_TextureData, GraphicsDx11* p_Gfx, std::string textureName);
-		static void LoadModel(std::vector<uint8_t> v_ModelData, GraphicsDx11* p_Gfx, std::string modelName);
-		static void CreateCriticalBuffer(size_t size, UINT bindFlag, D3D11_USAGE usage, UINT cpuAccess, GraphicsDx11* p_Gfx, ID3D11Buffer** pp_Buffer);
-		static void CreateVertexBuffer(std::vector<VertexDx11> v_verts, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result);
+		
+		// Index buffer creation
 		static void CreateIndexBuffer(std::vector<uint32_t> v_inds, ID3D11Buffer** pp_Buffer, GraphicsDx11* p_Gfx, bool& result);
+		
+		// Const buffer creation
 		static void CreateEmptyBuffer(size_t size, UINT bindFlag, D3D11_USAGE usage, UINT cpuAccess, GraphicsDx11* p_Gfx, ID3D11Buffer** pp_Buffer, bool& result);
-		static void CreateMaterial(std::vector<uint8_t> v_MatData, GraphicsDx11* p_Gfx, std::string matName);
+		static void CreateCriticalBuffer(size_t size, UINT bindFlag, D3D11_USAGE usage, UINT cpuAccess, GraphicsDx11* p_Gfx, ID3D11Buffer** pp_Buffer);
+		
+		// Texture loading
+		static void LoadTexture(std::vector<uint8_t> v_TextureData, GraphicsDx11* p_Gfx, std::string textureName);
 		static void LoadTextureFromPackAsync(std::string originalName, GraphicsDx11* p_Gfx);
+		static void CreateCriticalTexture(uint32_t width, uint32_t height, DXGI_FORMAT format, D3D11_BIND_FLAG bindFlag, GraphicsDx11* p_Gfx, ID3D11Texture2D** pp_Texture, ID3D11ShaderResourceView** pp_View);
+		
+		// Model loading
+		static void LoadModel(std::vector<uint8_t> v_ModelData, GraphicsDx11* p_Gfx, std::string modelName);
+		
+		// Material loading
+		static void CreateMaterial(std::vector<uint8_t> v_MatData, GraphicsDx11* p_Gfx, std::string matName);
 
 	private: // ID generating functions
 		uint32_t GenerateShaderUID();
@@ -138,8 +162,15 @@ namespace Mesa
 	private: // Layer rendering interfaces
 		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_LayerColorBuffer;
 		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_PrevLayerColorBuffer;
-		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_LayerResourceView;
-		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_PrevLayerResourceView;
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_ColorResourceView;
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_PrevColorResourceView;
+
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_LayerSpecBuffer;
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> mp_PrevLayerSpecBuffer;
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_SpecResourceView;
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mp_PrevSpecResourceView;
+
+		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_BlendingPlaneBuffer;
 
 	private: // Buffers for loaded assets
 		std::vector<ShaderDx11> mv_Shaders;
@@ -155,5 +186,6 @@ namespace Mesa
 
 	private: // Data related to layer drawing
 		uint32_t m_NumLayers = 1; // Use only 1 layer by default
+		uint32_t m_BlendingShaderId = 0;
 	};
 }

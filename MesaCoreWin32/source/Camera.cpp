@@ -17,6 +17,31 @@ namespace Mesa
 		m_Proj = DirectX::XMMatrixPerspectiveFovLH(fovRadians, aspectRatio, nz, fz);
 	}
 
+	void CameraDx11::HandleMovement(CameraMovement direction, float deltaTime)
+	{
+		switch (direction)
+		{
+		case Mesa::CameraMovementForward:
+			AdjustPosition(DirectX::XMVectorScale(m_ForwardVec, 1.0f * deltaTime));
+			break;
+		case Mesa::CameraMovementBackward:
+			AdjustPosition(DirectX::XMVectorScale(m_BackwardVec, 1.0f * deltaTime));
+			break;
+		case Mesa::CameraMovementLeft:
+			AdjustPosition(DirectX::XMVectorScale(m_LeftVec, 1.0f * deltaTime));
+			break;
+		case Mesa::CameraMovementRight:
+			AdjustPosition(DirectX::XMVectorScale(m_RightVec, 1.0f * deltaTime));
+			break;
+		case Mesa::CameraMovementUp:
+			break;
+		case Mesa::CameraMovementDown:
+			break;
+		default:
+			break;
+		}
+	}
+
 	const DirectX::XMMATRIX& CameraDx11::GetViewMatrix() const
 	{
 		return m_View;

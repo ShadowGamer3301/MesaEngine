@@ -23,6 +23,8 @@ namespace Mesa
 		CameraDx11();
 		void SetProjectionValues(float fov, float aspectRatio, float nz, float fz);
 
+		void HandleMovement(CameraMovement direction, float deltaTime = 1.0f);
+
 		const DirectX::XMMATRIX& GetViewMatrix() const;
 		const DirectX::XMMATRIX& GetProjectionMatrix() const;
 
