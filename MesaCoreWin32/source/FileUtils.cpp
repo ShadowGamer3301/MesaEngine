@@ -245,4 +245,40 @@ namespace Mesa
 		std::string result = p.filename().string();
 		return result;
 	}
+
+	std::vector<std::string> FileUtils::GetFileNamesInDirectory(const std::string& path)
+	{
+		std::vector<std::string> result;
+
+		try
+		{
+			for (const auto& entry : std::filesystem::directory_iterator(path))
+			{
+				std::filesystem::path p = entry.path();
+				result.push_back(p.string());
+			}
+
+			return result;
+		}
+		catch (const std::filesystem::filesystem_error& fe)
+		{
+			LOG_F(ERROR, "%s", fe.what());
+			return result;
+		}
+	}
+	std::vector<unsigned char> FileUtils::LoadDataChunk(const std::string& path, const size_t& size, const size_t& pos)
+	{
+		// Validate if the file even exists
+		if (!FileExists(path)) return std::vector<unsigned char>();
+
+		std::vector<unsigned char> result(size);
+
+		// Open the file and read raw bytes from it
+		std::ifstream file(path, std::ios::binary);
+		file.seekg(pos);
+
+		file.read((char*)&result[0], size);
+		
+		return result;
+	}
 }
