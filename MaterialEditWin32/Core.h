@@ -1,4 +1,5 @@
 #pragma once
+// FLTK header files
 #include <FL/Fl.H>
 #include <FL/Fl_Window.H>
 #include <FL/Fl_Box.H>
@@ -9,4 +10,5 @@
 #include <FL/Fl_Slider.H>
 #include <FL/Fl_Choice.H>
 
+// Mesa Core header files
 #include <Mesa/Mesa_MRT.h>

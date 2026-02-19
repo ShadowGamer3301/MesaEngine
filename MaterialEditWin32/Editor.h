@@ -16,12 +16,12 @@ private:
 	void SaveMaterial(Mesa::Material* p_Material, std::string outPath);
 
 private:
-	EditorWindow* mp_EditorWindow = nullptr;
-	bool m_ExitSignal = false;
-	Mesa::GraphicsDx11* mp_Graphics = nullptr;
-	Mesa::GameObject3D m_Object;
+	EditorWindow* mp_EditorWindow = nullptr; // Main editor window
+	bool m_ExitSignal = false; // Singnal used for determining if the application should finish
+	Mesa::GraphicsDx11* mp_Graphics = nullptr; // Graphics interface used for preview
+	Mesa::GameObject3D m_Object; // Preview object
 
-	std::string m_ModelName = std::string();
-	std::string m_ColorPassName = std::string();
-	std::string m_SpecularPassName = std::string();
+	std::string m_ModelName = std::string(); // Holds texts that is in model path input
+	std::string m_ColorPassName = std::string(); // Holds texts that is in color pass path input
+	std::string m_SpecularPassName = std::string(); // Holds texts that is in specular pass path input
 };
