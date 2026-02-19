@@ -22,5 +22,6 @@ namespace Mesa
 		static std::string StripPathToFileName(const std::string& path);
 		static std::vector<std::string> GetFileNamesInDirectory(const std::string& path);
 		static std::vector<unsigned char> LoadDataChunk(const std::string& path, const size_t& size, const size_t& pos);
+		static void AppendTextToFile(const std::string& path, const std::string& data);
 	};
 }

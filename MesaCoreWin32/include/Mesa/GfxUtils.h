@@ -87,6 +87,12 @@ namespace Mesa
 	{
 		friend class GraphicsDx11;
 		friend class ModelDx11;
+	public:
+		std::string GetMaterialFileName() const noexcept { return m_MeshMatName; }
+		std::string GetFullMaterialName() const noexcept { return m_MaterialName; }
+
+		inline void SetFullMaterialName(const std::string& name) noexcept { m_MaterialName = name; }
+
 	private:
 		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_VertexBuffer;
 		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_IndexBuffer;
@@ -101,6 +107,10 @@ namespace Mesa
 	class MSAPI ModelDx11 : public Model
 	{
 		friend class GraphicsDx11;
+	public:
+		MeshDx11* GetMesh(const size_t& index);
+		inline size_t GetNumMeshes() const noexcept { return mv_Meshes.size(); }
+
 	private:
 		Microsoft::WRL::ComPtr<ID3D11Buffer> mp_ConstBufferMVP;
 		std::vector<MeshDx11> mv_Meshes;

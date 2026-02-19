@@ -30,6 +30,7 @@ namespace Mesa
 		virtual void SetBlendingShader(uint32_t shaderId) = 0;
 		virtual uint32_t LoadSourceModel(const std::string& originalName) = 0;
 		virtual uint32_t LoadSourceTexture(const std::string& originalName) = 0;
+		virtual uint32_t LoadSourceMaterial(const std::string& origianlName) = 0;
 	};
 
 	class MSAPI GraphicsDx11Exception : public Exception
@@ -51,6 +52,7 @@ namespace Mesa
 
 	public: // Frame drawing functions
 		void DrawFrame(Window* p_Window) override;
+		void DrawFrame(HWND hWnd, uint32_t width, uint32_t height);
 		void SetNumberOfLayers(const uint32_t& layers) override;
 		void SetCamera(Camera* p_Camera) override;
 		void InsertGameObject(GameObject3D* p_GameObject) override;
@@ -69,6 +71,10 @@ namespace Mesa
 		uint32_t LoadMaterialFromPack(const std::string& originalName) override;
 		uint32_t LoadSourceModel(const std::string& originalName) override;
 		uint32_t LoadSourceTexture(const std::string& originalName) override;
+		uint32_t LoadSourceMaterial(const std::string& origianlName) override;
+
+		void RescanMaterials();
+		void RescanMaterialsSource();
 
 	public: // Getters
 		uint32_t GetShaderIdByVertexName(const std::string& name);
@@ -76,6 +82,9 @@ namespace Mesa
 		uint32_t GetTextureIdByName(const std::string& name);
 		uint32_t GetModelIdByName(const std::string& name);
 		uint32_t GetMaterialIdByName(const std::string& name);
+
+		ModelDx11* GetModelById(const uint32_t& id);
+		TextureDx11* GetTextureById(const uint32_t& id);
 
 	private: // Pipeline initialization functions
 		void InitializeFactory();

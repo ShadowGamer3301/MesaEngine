@@ -281,4 +281,14 @@ namespace Mesa
 		
 		return result;
 	}
+
+	void FileUtils::AppendTextToFile(const std::string& path, const std::string& data)
+	{
+		std::ofstream file(path, std::ios::app);
+		
+		file << data;
+
+		file.flush();
+		file.close();
+	}
 }

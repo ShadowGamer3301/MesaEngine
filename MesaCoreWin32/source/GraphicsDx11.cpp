@@ -135,6 +135,19 @@ namespace Mesa
         // Configure blend state
         InitializeBlendState();
         LOG_F(INFO, "Blend state initialized");
+
+        // Create renderpass buffers
+        std::thread colorPassBuf(GraphicsDx11::CreateCriticalTexture, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, D3D11_BIND_SHADER_RESOURCE, this, mp_LayerColorBuffer.GetAddressOf(), mp_ColorResourceView.GetAddressOf());
+        std::thread prevColorPassBuf(GraphicsDx11::CreateCriticalTexture, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, D3D11_BIND_SHADER_RESOURCE, this, mp_PrevLayerColorBuffer.GetAddressOf(), mp_PrevColorResourceView.GetAddressOf());
+        std::thread specPassBuf(GraphicsDx11::CreateCriticalTexture, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, D3D11_BIND_SHADER_RESOURCE, this, mp_LayerSpecBuffer.GetAddressOf(), mp_SpecResourceView.GetAddressOf());
+        std::thread prevSpecPassBuf(GraphicsDx11::CreateCriticalTexture, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, D3D11_BIND_SHADER_RESOURCE, this, mp_PrevLayerSpecBuffer.GetAddressOf(), mp_PrevSpecResourceView.GetAddressOf());
+
+        colorPassBuf.join();
+        prevColorPassBuf.join();
+        specPassBuf.join();
+        prevSpecPassBuf.join();
+
+        InitializeBlendingMesh();
     }
 
     GraphicsDx11::~GraphicsDx11()
@@ -145,6 +158,28 @@ namespace Mesa
         Draws a single frame
     */
     void GraphicsDx11::DrawFrame(Window* p_Window)
+    {
+        for (int i = 0; i < m_NumLayers; i++)
+        {
+            RenderColorBuffer(i);
+            mp_Context->CopyResource(mp_LayerColorBuffer.Get(), mp_BackBuffer.Get());
+            RenderSpecularBuffer(i);
+            mp_Context->CopyResource(mp_LayerSpecBuffer.Get(), mp_BackBuffer.Get());
+            if (i == 0)
+            {
+                mp_Context->CopyResource(mp_PrevLayerColorBuffer.Get(), mp_LayerColorBuffer.Get());
+                mp_Context->CopyResource(mp_PrevLayerSpecBuffer.Get(), mp_LayerSpecBuffer.Get());
+            }
+            else
+            {
+                BlendLayers();
+            }
+        }
+
+        mp_SwapChain->Present(0, 0);
+    }
+
+    void GraphicsDx11::DrawFrame(HWND hWnd, uint32_t width, uint32_t height)
     {
         for (int i = 0; i < m_NumLayers; i++)
         {
@@ -923,7 +958,7 @@ namespace Mesa
             return 0;
         }
 
-        LOG_F(INFO, "Loading %s", textureName.c_str());
+        LOG_F(INFO, "Loading %s", originalName.c_str());
 
         // Create new texture instance
         TextureDx11 texture = {};
@@ -935,11 +970,11 @@ namespace Mesa
         uint32_t error = lodepng::decode(v_DecodedBuffer, width, height, originalName);
         if (error)
         {
-            LOG_F(ERROR, "Failed to decode %s", textureName.c_str());
+            LOG_F(ERROR, "Failed to decode %s", originalName.c_str());
             return 0;
         }
 
-        LOG_F(INFO, "Decoded %s", textureName.c_str());
+        LOG_F(INFO, "Decoded %s", originalName.c_str());
 
         // Fill out DirectX structures for texture
         D3D11_TEXTURE2D_DESC desc = {};
@@ -979,13 +1014,137 @@ namespace Mesa
         }
 
         // Fill out the rest of the texture details
-        texture.m_TextureName = textureName;
+        texture.m_TextureName = originalName;
         m_TextureIdSemaphore.acquire();
         texture.m_TextureUID = GenerateTextureUID();
         mv_Textures.push_back(texture);
         m_TextureIdSemaphore.release();
         LOG_F(INFO, "%s loaded with UID = %u", texture.GetTextureName().c_str(), texture.GetTextureUID());
         return texture.GetTextureUID();
+    }
+
+    uint32_t GraphicsDx11::LoadSourceMaterial(const std::string& origianlName)
+    {
+        std::vector<uint8_t> v_MatData = FileUtils::ReadBinaryData(origianlName);
+
+        std::string matText = std::string(v_MatData.begin(), v_MatData.end());
+        matText = ConvertUtils::RemoveCharFromString(matText, '\r');
+
+        // Split material text into single lines
+        std::vector<std::string> v_Lines = ConvertUtils::SplitStringByChar(matText, '\n');
+
+        Material material = {};
+        glm::vec4 baseColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        glm::vec4 subColor = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+        float specPower = 1.0f;
+        std::string diffTex, normTex, specTex;
+
+        // Create threads that texture loading functions will be sent to
+        std::thread diffThread, normThread, specThread;
+
+        for (const auto& line : v_Lines)
+        {
+            // Skip lines that are empty or simply have only newline character
+            if (line.empty() || strcmp(line.c_str(), "\n") == 0) continue;
+
+            // Split line into single words
+            std::vector<std::string> v_Words = ConvertUtils::SplitStringByChar(line, '=');
+
+            // Skip line that have only one word since all parameters require at least two
+            if (v_Words.size() <= 1) continue;
+
+            // Base color parameters
+            if (strcmp(v_Words[0].c_str(), "$base_r") == 0) baseColor.x = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$base_g") == 0) baseColor.y = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$base_b") == 0) baseColor.z = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$base_a") == 0) baseColor.w = ConvertUtils::StringToFloat(v_Words[1]);
+            // Sub color parameters
+            else if (strcmp(v_Words[0].c_str(), "$sub_r") == 0) subColor.x = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$sub_g") == 0) subColor.y = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$sub_b") == 0) subColor.z = ConvertUtils::StringToFloat(v_Words[1]);
+            else if (strcmp(v_Words[0].c_str(), "$sub_a") == 0) subColor.w = ConvertUtils::StringToFloat(v_Words[1]);
+            // Specular data
+            else if (strcmp(v_Words[0].c_str(), "$specular") == 0) specPower = ConvertUtils::StringToFloat(v_Words[1]);
+            // Texture data
+            else if (strcmp(v_Words[0].c_str(), "$diffuseTex") == 0)
+            {
+                diffThread = std::thread(LoadTextureFromPackAsync, v_Words[1], this);
+                diffTex = v_Words[1];
+            }
+            else if (strcmp(v_Words[0].c_str(), "$specularTex") == 0)
+            {
+                specThread = std::thread(LoadTextureFromPackAsync, v_Words[1], this);
+                specTex = v_Words[1];
+            }
+            else if (strcmp(v_Words[0].c_str(), "$normalTex") == 0)
+            {
+                normThread = std::thread(LoadTextureFromPackAsync, v_Words[1], this);
+                normTex = v_Words[1];
+            }
+        }
+
+        // Check if other threads were started and if yes join them
+        if (normThread.get_id() != std::thread::id()) {
+            if (normThread.joinable())
+                normThread.join();
+            else
+                LOG_F(ERROR, "Normal thread was started but is not joinable!");
+        }
+
+        if (diffThread.get_id() != std::thread::id()) {
+            if (diffThread.joinable())
+                diffThread.join();
+            else
+                LOG_F(ERROR, "Diffuse thread was started but is not joinable!");
+        }
+
+        if (specThread.get_id() != std::thread::id()) {
+            if (specThread.joinable())
+                specThread.join();
+            else
+                LOG_F(ERROR, "Specular thread was started but is not joinable!");
+        }
+
+        // Set material properties
+        material.SetBaseColor(baseColor);
+        material.SetSubColor(subColor);
+        material.SetSpecularPower(specPower);
+        material.SetDiffuseTextureId(GetTextureIdByName(diffTex));
+        material.SetSpecularTextureId(GetTextureIdByName(specTex));
+        material.SetNormalTextureId(GetTextureIdByName(normTex));
+        material.m_MaterialName = origianlName;
+
+        // Add material to Graphics class instance
+        m_MaterialIdSemaphore.acquire();
+        material.m_MaterialId = GenerateMaterialUID();
+        mv_Materials.push_back(material);
+        m_MaterialIdSemaphore.release();
+
+        LOG_F(INFO, "Material %s created with ID %u", material.GetMaterialName().c_str(), material.GetMaterialUID());
+
+        return material.GetMaterialUID();
+    }
+
+    void GraphicsDx11::RescanMaterials()
+    {
+        for (auto& model : mv_Models)
+        {
+            for (auto& mesh : model.mv_Meshes)
+            {
+                mesh.m_MaterialId = LoadMaterialFromPack(mesh.m_MaterialName);
+            }
+        }
+    }
+
+    void GraphicsDx11::RescanMaterialsSource()
+    {
+        for (auto& model : mv_Models)
+        {
+            for (auto& mesh : model.mv_Meshes)
+            {
+                mesh.m_MaterialId = LoadSourceMaterial(mesh.m_MaterialName);
+            }
+        }
     }
 
     /*
@@ -1061,6 +1220,36 @@ namespace Mesa
 
         // If model ID can't be found return 0 to indicate that the material isn't loaded
         return 0;
+    }
+
+    /*
+        Returns pointer to the model if its id matches with provided value
+    */
+    ModelDx11* GraphicsDx11::GetModelById(const uint32_t& id)
+    {
+        for (auto& model : mv_Models)
+        {
+            if (model.GetModelUID() == id)
+                return &model;
+        }
+
+        // If model can't be found return nullptr
+        return nullptr;
+    }
+
+    /*
+        Returns pointer to the texture if its id matches with provided value
+    */
+    TextureDx11* GraphicsDx11::GetTextureById(const uint32_t& id)
+    {
+        for (auto& texture : mv_Textures)
+        {
+            if (texture.GetTextureUID() == id)
+                return &texture;
+        }
+
+        // If texture can't be found return nullptr
+        return nullptr;
     }
 
     /*
@@ -1485,7 +1674,7 @@ namespace Mesa
 
         for (auto& object : mv_Objects)
         {
-            if (object->GetLayer() != layer) continue;
+            if (object->GetLayer() != layer || object->GetColorShader() == 0 || object->GetModel() == 0) continue;
 
             for (auto& shader : mv_Shaders)
             {
@@ -1560,7 +1749,7 @@ namespace Mesa
 
         for (auto& object : mv_Objects)
         {
-            if (object->GetLayer() != layer) continue;
+            if (object->GetLayer() != layer || object->GetSpecularShader() == 0 || object->GetModel() == 0) continue;
 
             for (auto& shader : mv_Shaders)
             {
