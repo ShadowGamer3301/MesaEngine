@@ -1156,6 +1156,86 @@ namespace Mesa
         }
     }
 
+    void GraphicsDx11::UnloadMaterial(const uint32_t& mid)
+    {
+        for (size_t i = 0; i < mv_Materials.size(); i++)
+        {
+            if (mv_Materials[i].GetMaterialUID() == mid)
+            {
+                mv_Materials.erase(mv_Materials.begin() + i);
+                return;
+            }
+        }
+    }
+
+    void GraphicsDx11::UnloadAllMaterials()
+    {
+        mv_Materials.clear();
+    }
+
+    void GraphicsDx11::UnloadModel(const uint32_t& mid)
+    {
+        for (size_t i = 0; i < mv_Models.size(); i++)
+        {
+            if (mv_Models[i].GetModelUID() == mid)
+            {
+                for (auto& mesh : mv_Models[i].mv_Meshes)
+                {
+                    mesh.mp_ColorPassBuffer.Reset();
+                    mesh.mp_SpecularPassBuffer.Reset();
+                    mesh.mp_IndexBuffer.Reset();
+                    mesh.mp_VertexBuffer.Reset();
+                }
+
+                mv_Models[i].mv_Meshes.clear();
+
+                mv_Models[i].mp_ConstBufferMVP.Reset();
+
+                mv_Models.erase(mv_Models.begin() + i);
+                return;
+            }
+        }
+    }
+
+    void GraphicsDx11::UnloadAllModels()
+    {
+        for (auto& model : mv_Models)
+        {
+            for (auto& mesh : model.mv_Meshes)
+            {
+                mesh.mp_ColorPassBuffer.Reset();
+                mesh.mp_SpecularPassBuffer.Reset();
+                mesh.mp_IndexBuffer.Reset();
+                mesh.mp_VertexBuffer.Reset();
+            }
+
+            model.mv_Meshes.clear();
+
+            model.mp_ConstBufferMVP.Reset();
+        }
+
+        mv_Models.clear();
+    }
+
+    void GraphicsDx11::UnloadTexture(const uint32_t& tid)
+    {
+        for (size_t i = 0; i < mv_Textures.size(); i++)
+        {
+            if (mv_Textures[i].GetTextureUID() == tid)
+            {
+                mv_Textures[i].mp_ResourceView.Reset();
+                mv_Textures[i].mp_RawData.Reset();
+
+                mv_Textures.erase(mv_Textures.begin() + i);
+                return;
+            }
+        }
+    }
+
+    void GraphicsDx11::UnloadAllTextures()
+    {
+    }
+
     /*
         Returns shader ID if the its vertex name matches with provided string
     */

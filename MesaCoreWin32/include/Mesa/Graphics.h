@@ -76,6 +76,14 @@ namespace Mesa
 		void RescanMaterials();
 		void RescanMaterialsSource();
 
+	public: // Asset unloading functions
+		void UnloadMaterial(const uint32_t& mid);
+		void UnloadAllMaterials();
+		void UnloadModel(const uint32_t& mid);
+		void UnloadAllModels();
+		void UnloadTexture(const uint32_t& tid);
+		void UnloadAllTextures();
+
 	public: // Getters
 		uint32_t GetShaderIdByVertexName(const std::string& name);
 		uint32_t GetShaderIdByPixelName(const std::string& name);

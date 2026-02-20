@@ -118,6 +118,8 @@ void Editor::ManageEvents()
 			mp_Graphics->RescanMaterialsSource();
 
 			mp_MaterialWindow = new MaterialWindow(400, 800, "Material properties");
+
+
 		}
 		// If data in color pass input was changed
 		else if (event.first == EditorEventType_ColorPassUpdate)
