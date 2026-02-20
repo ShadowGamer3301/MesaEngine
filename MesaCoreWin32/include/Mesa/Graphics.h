@@ -114,6 +114,8 @@ namespace Mesa
 
 	private: // Synchronus asset loading functions
 		std::map<std::string, std::string> LoadMaterialDefinitions(const std::string& matDefName);
+		std::map<std::string, std::string> LoadSourceMaterialDefinitions(const std::string& matDefName);
+
 
 	private: // Asynchronus asset loading functions
 		// Vertex buffer creation
@@ -142,6 +144,7 @@ namespace Mesa
 		// Model loading
 		static void LoadModel(std::vector<uint8_t> v_ModelData, GraphicsDx11* p_Gfx, std::string modelName);
 		
+
 		// Material loading
 		static void CreateMaterial(std::vector<uint8_t> v_MatData, GraphicsDx11* p_Gfx, std::string matName);
 

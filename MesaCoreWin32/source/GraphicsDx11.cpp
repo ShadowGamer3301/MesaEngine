@@ -176,6 +176,8 @@ namespace Mesa
             }
         }
 
+        mp_Context->CopyResource(mp_BackBuffer.Get(), mp_PrevLayerColorBuffer.Get());
+
         mp_SwapChain->Present(0, 0);
     }
 
@@ -197,6 +199,8 @@ namespace Mesa
                 BlendLayers();
             }
         }
+
+        mp_Context->CopyResource(mp_BackBuffer.Get(), mp_PrevLayerColorBuffer.Get());
 
         mp_SwapChain->Present(0, 0);
     }
@@ -785,27 +789,16 @@ namespace Mesa
 
         // Read pack contents
         std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Texture"), packName);
-        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
-
-        if (v_PackData.empty())
-        {
-            LOG_F(ERROR, "Could not read %s", packPath.c_str());
-            return 0;
-        }
 
         // Calculate where file details are
         uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * packIndex.value();
 
-        // Validate calculation results
-        if (headerPos >= v_PackData.size())
-        {
-            LOG_F(ERROR, "Invalid header position of %s", originalName.c_str());
-            return 0;
-        }
 
         // Calculate where file data starts
         uint64_t startPos = 0;
-        memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+        auto v_StartPosData = FileUtils::LoadDataChunk(packPath, sizeof(uint64_t), headerPos);
+        memcpy(&startPos, &v_StartPosData[0], sizeof(uint64_t));
+
 
         // Validate calculation results
         if (startPos <= headerPos)
@@ -816,7 +809,8 @@ namespace Mesa
 
         // Grab file size
         uint32_t fileSize = 0;
-        memcpy(&fileSize, &v_PackData[headerPos + sizeof(uint64_t)], sizeof(uint32_t));
+        auto v_FileSizeData = FileUtils::LoadDataChunk(packPath, sizeof(uint32_t), headerPos + sizeof(uint64_t));
+        memcpy(&fileSize, &v_FileSizeData[0], sizeof(uint32_t));
 
         // Validate file size
         if (fileSize <= 0)
@@ -826,8 +820,7 @@ namespace Mesa
         }
 
         // Load texture data
-        std::vector<uint8_t> v_TextureData(fileSize);
-        memcpy(&v_TextureData[0], &v_PackData[startPos - 1], fileSize);
+        std::vector<uint8_t> v_TextureData = FileUtils::LoadDataChunk(packPath, fileSize, startPos - 1);
 
         LoadTexture(v_TextureData, this, originalName);
 
@@ -912,6 +905,10 @@ namespace Mesa
 
     uint32_t GraphicsDx11::LoadSourceModel(const std::string& originalName)
     {
+        std::string matDefPath = originalName + ".matdef";
+
+        auto matDef = LoadSourceMaterialDefinitions(matDefPath);
+
         Assimp::Importer importer;
 
         const aiScene* p_Scene = importer.ReadFile(originalName, aiProcess_Triangulate | aiProcess_ConvertToLeftHanded);
@@ -936,6 +933,12 @@ namespace Mesa
         {
             LOG_F(ERROR, "Cration of constant buffer failed!");
             return 0;
+        }
+
+        for (auto& mesh : model.mv_Meshes)
+        {
+            mesh.m_MaterialName = ConvertUtils::ReplaceCharInString(matDef[mesh.m_MeshMatName], '\\', '/');
+            mesh.m_MaterialId = LoadSourceMaterial(mesh.m_MaterialName);
         }
 
         // Fill out the rest of the model details
@@ -1025,6 +1028,12 @@ namespace Mesa
 
     uint32_t GraphicsDx11::LoadSourceMaterial(const std::string& origianlName)
     {
+        if (GetMaterialIdByName(origianlName) != 0)
+        {
+            LOG_F(INFO, "%s already loaded with UID = %u", origianlName.c_str(), GetMaterialIdByName(origianlName));
+            return GetMaterialIdByName(origianlName);
+        }
+
         std::vector<uint8_t> v_MatData = FileUtils::ReadBinaryData(origianlName);
 
         std::string matText = std::string(v_MatData.begin(), v_MatData.end());
@@ -1939,6 +1948,30 @@ namespace Mesa
         return result;
     }
 
+    std::map<std::string, std::string> GraphicsDx11::LoadSourceMaterialDefinitions(const std::string& matDefName)
+    {
+        std::map<std::string, std::string> result;
+
+        std::string matdef = FileUtils::ReadTextData(matDefName);
+
+        matdef = ConvertUtils::RemoveCharFromString(matdef, '\r');
+
+        std::vector<std::string> v_Lines = ConvertUtils::SplitStringByChar(matdef, '\n');
+
+        for (const auto& line : v_Lines)
+        {
+            if (line.size() < 3) continue;
+
+            std::vector<std::string> v_Params = ConvertUtils::SplitStringByChar(line, '=');
+
+            if (v_Params.size() < 2) continue;
+
+            result[v_Params[0]] = v_Params[1];
+        }
+
+        return result;
+    }
+
     /*
         Compiles singular shader
     */
@@ -2095,7 +2128,8 @@ namespace Mesa
         // Check if the texture is already loaded
         if (p_Gfx->GetTextureIdByName(textureName) != 0)
         {
-            LOG_F(INFO, "%s already loaded with ID = %u", p_Gfx->GetTextureIdByName(textureName));
+            uint32_t tid = p_Gfx->GetTextureIdByName(textureName);
+            LOG_F(INFO, "%s already loaded with ID = %u", textureName.c_str(), tid);
             return;
         }
 
@@ -2469,8 +2503,9 @@ namespace Mesa
     */
     void GraphicsDx11::LoadTextureFromPackAsync(std::string originalName, GraphicsDx11* p_Gfx)
     {
+
         // Use lookup table to find in which pack the texture is contained in
-            // and what index it has
+        // and what index it has
         auto packName = LookUpUtils::FindFilePack(originalName);
         auto packIndex = LookUpUtils::FindFileIndex(originalName);
 
@@ -2483,27 +2518,16 @@ namespace Mesa
 
         // Read pack contents
         std::string packPath = FileUtils::CombinePaths(ConfigUtils::GetValueFromConfigCS("Path", "Texture"), packName);
-        std::vector<uint8_t> v_PackData = FileUtils::ReadBinaryData(packPath);
-
-        if (v_PackData.empty())
-        {
-            LOG_F(ERROR, "Could not read %s", packPath.c_str());
-            return;
-        }
 
         // Calculate where file details are
         uint32_t headerPos = sizeof(uint32_t) + (sizeof(uint64_t) + sizeof(uint32_t)) * packIndex.value();
 
-        // Validate calculation results
-        if (headerPos >= v_PackData.size())
-        {
-            LOG_F(ERROR, "Invalid header position of %s", originalName.c_str());
-            return;
-        }
 
         // Calculate where file data starts
         uint64_t startPos = 0;
-        memcpy(&startPos, &v_PackData[headerPos], sizeof(uint64_t));
+        auto v_StartPosData = FileUtils::LoadDataChunk(packPath, sizeof(uint64_t), headerPos);
+        memcpy(&startPos, &v_StartPosData[0], sizeof(uint64_t));
+
 
         // Validate calculation results
         if (startPos <= headerPos)
@@ -2514,7 +2538,8 @@ namespace Mesa
 
         // Grab file size
         uint32_t fileSize = 0;
-        memcpy(&fileSize, &v_PackData[headerPos + sizeof(uint64_t)], sizeof(uint32_t));
+        auto v_FileSizeData = FileUtils::LoadDataChunk(packPath, sizeof(uint32_t), headerPos + sizeof(uint64_t));
+        memcpy(&fileSize, &v_FileSizeData[0], sizeof(uint32_t));
 
         // Validate file size
         if (fileSize <= 0)
@@ -2524,8 +2549,7 @@ namespace Mesa
         }
 
         // Load texture data
-        std::vector<uint8_t> v_TextureData(fileSize);
-        memcpy(&v_TextureData[0], &v_PackData[startPos - 1], fileSize);
+        std::vector<uint8_t> v_TextureData = FileUtils::LoadDataChunk(packPath, fileSize, startPos - 1);
 
         LoadTexture(v_TextureData, p_Gfx, originalName);
     }

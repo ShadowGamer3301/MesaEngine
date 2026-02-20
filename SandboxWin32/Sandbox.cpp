@@ -2,7 +2,14 @@
 
 Sandbox::Sandbox()
 {
-	mp_Graphics->LoadSourceModel("Intermediate/Model/ACD_CHF_UNI_Layla_ScubaMask.fbx");
+	uint32_t mid = mp_Graphics->LoadModelFromPack("Intermediate/Model/ACD_CHF_UNI_Layla_ScubaMask.fbx");
+
+	uint32_t cid = mp_Graphics->CompileForwardShaderFromPack("Intermediate/Shader/V_ColorPass.hlsl");
+
+	m_Object.SetModel(mid);
+	m_Object.SetColorShader(cid);
+
+	mp_Graphics->InsertGameObject(&m_Object);
 
 	m_Camera.SetProjectionValues(60, mp_Window->GetWindowWidth()/(float)mp_Window->GetWindowHeight(), 0.01f, 1000.0f);
 	mp_Graphics->SetCamera(&m_Camera);

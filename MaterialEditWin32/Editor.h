@@ -20,6 +20,7 @@ private:
 	bool m_ExitSignal = false; // Singnal used for determining if the application should finish
 	Mesa::GraphicsDx11* mp_Graphics = nullptr; // Graphics interface used for preview
 	Mesa::GameObject3D m_Object; // Preview object
+	Mesa::CameraDx11 m_Camera; // Preview camera
 
 	std::string m_ModelName = std::string(); // Holds texts that is in model path input
 	std::string m_ColorPassName = std::string(); // Holds texts that is in color pass path input

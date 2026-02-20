@@ -35,6 +35,13 @@ Editor::Editor()
 
 	// Initialize graphics interface
 	mp_Graphics = new Mesa::GraphicsDx11(mp_EditorWindow->GetNativeViewerHandle(), 800, 600);
+
+	// Add preview object to draw list
+	mp_Graphics->InsertGameObject(&m_Object);
+
+	// Set up camera projection values and use it for rendering preview
+	m_Camera.SetProjectionValues(60.0f, 800.0f / 600.0f, 0.01f, 1000.0f);
+	mp_Graphics->SetCamera(&m_Camera);
 }
 
 /*
@@ -98,18 +105,14 @@ void Editor::ManageEvents()
 			// Create path for matdef file
 			std::string matDefPath = m_ModelName + ".matdef";
 
-			// Check if matdef file already exists
-			if (!Mesa::FileUtils::FileExists(matDefPath))
-			{
-				// If not generate new .matdef file
-				LOG_F(INFO, ".matdef file not found! Generating new one...");
-				Mesa::FileUtils::MakeFile(matDefPath);
-				LOG_F(INFO, ".matdef file generated!");
-			}
+			// Regenerate new .matdef file
+			LOG_F(INFO, "Regenerating .matdef file...");
+			Mesa::FileUtils::MakeFileWithContent(matDefPath, "");
 
 			LOG_F(INFO, "Generating material files...");
 			// Start creating materials and material definitions
 			GenerateMaterialFilesForModel(mp_Graphics->GetModelById(modelId));
+			LOG_F(INFO, ".matdef file generated!");
 			// Rescan for newly created or updated materials
 			mp_Graphics->RescanMaterialsSource();
 		}
@@ -203,15 +206,15 @@ void Editor::SaveMaterial(Mesa::Material* p_Material, std::string outPath)
 	glm::vec4 subColor = p_Material->GetSubColor();
 
 	// Save base and sub color values
-	oss << "$base_r " << baseColor.r << "\n"
-		<< "$base_g " << baseColor.g << "\n"
-		<< "$base_b " << baseColor.b << "\n"
-		<< "$base_a " << baseColor.a << "\n"
-		<< "$sub_r " << subColor.r << "\n"
-		<< "$sub_g " << subColor.g << "\n"
-		<< "$sub_b " << subColor.b << "\n"
-		<< "$sub_a " << subColor.a << "\n"
-		<< "$specular " << p_Material->GetSpecularPower() << "\n";
+	oss << "$base_r=" << baseColor.r << "\n"
+		<< "$base_g=" << baseColor.g << "\n"
+		<< "$base_b=" << baseColor.b << "\n"
+		<< "$base_a=" << baseColor.a << "\n"
+		<< "$sub_r=" << subColor.r << "\n"
+		<< "$sub_g=" << subColor.g << "\n"
+		<< "$sub_b=" << subColor.b << "\n"
+		<< "$sub_a=" << subColor.a << "\n"
+		<< "$specular=" << p_Material->GetSpecularPower() << "\n";
 
 	std::string matData = oss.str();
 
