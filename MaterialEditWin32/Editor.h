@@ -1,6 +1,7 @@
 #pragma once
 #include "Core.h"
 #include "EditorWindow.h"
+#include "MaterialWindow.h"
 
 class Editor
 {
@@ -17,6 +18,7 @@ private:
 
 private:
 	EditorWindow* mp_EditorWindow = nullptr; // Main editor window
+	MaterialWindow* mp_MaterialWindow = nullptr; // Material property editor window
 	bool m_ExitSignal = false; // Singnal used for determining if the application should finish
 	Mesa::GraphicsDx11* mp_Graphics = nullptr; // Graphics interface used for preview
 	Mesa::GameObject3D m_Object; // Preview object

@@ -49,6 +49,7 @@ Editor::Editor()
 */
 Editor::~Editor()
 {
+	if (mp_MaterialWindow) delete mp_MaterialWindow;
 	if (mp_Graphics) delete mp_Graphics;
 	if (mp_EditorWindow) delete mp_EditorWindow;
 }
@@ -115,6 +116,8 @@ void Editor::ManageEvents()
 			LOG_F(INFO, ".matdef file generated!");
 			// Rescan for newly created or updated materials
 			mp_Graphics->RescanMaterialsSource();
+
+			mp_MaterialWindow = new MaterialWindow(400, 800, "Material properties");
 		}
 		// If data in color pass input was changed
 		else if (event.first == EditorEventType_ColorPassUpdate)

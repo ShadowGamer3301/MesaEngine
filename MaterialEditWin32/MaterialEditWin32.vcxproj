@@ -138,11 +138,13 @@
     <ClInclude Include="EditorCallbacks.h" />
     <ClInclude Include="EditorEvent.h" />
     <ClInclude Include="EditorWindow.h" />
+    <ClInclude Include="MaterialWindow.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Editor.cpp" />
     <ClCompile Include="EditorWindow.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="MaterialWindow.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MesaCoreWin32\MesaCoreWin32.vcxproj">
